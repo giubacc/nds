@@ -18,8 +18,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef VLG_VLG_H_
-#define VLG_VLG_H_
+#ifndef NDS_NDS_H_
+#define NDS_NDS_H_
 
 #ifdef __GNUG__
 #include <string.h>
@@ -31,11 +31,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define INVALID_SOCKET (~0)
 #define SOCKET_ERROR   (-1)
 #endif
-#if defined WIN32 && defined _MSC_VER
-#include <winsock2.h>
-#else
 #include <arpa/inet.h>
-#endif
 
 #include <string>
 #include <memory>
@@ -73,10 +69,47 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define LS_EXUNX " @EXPECT THE UNEXPECTED! "
 
-namespace vlg {
+#define RET_ON_KO(fun)\
+{\
+    RetCode res;\
+    if((res = fun)){\
+        return res;\
+    }\
+}
+
+#define CMD_ON_OK(fun, cmd)\
+{\
+    int res;\
+    if(!(res = fun)){\
+        cmd;\
+    }\
+}
+
+#define CMD_ON_KO(fun, cmd)\
+{\
+    int res;\
+    if((res = fun)){\
+        cmd;\
+    }\
+}
+
+#define CMD_ON_NUL(ptr, cmd)\
+{\
+    if(!(ptr)){\
+        cmd;\
+    }\
+}
+
+#define NO_ACTION ;
+#define NDSDEFLOG "vlglog"
+
+#define IFLOG(log, meth) if(log) log->meth;
+#define DTOR_TRC(log) IFLOG(log, trace(LS_DTR, __func__))
+
+namespace nds {
 
 /** @brief return codes.
-    When possible functions and methods of the vulgaris framework
+    When possible functions and methods of nds framework
     will use this set of codes as return value.
 */
 typedef enum {

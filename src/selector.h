@@ -19,24 +19,81 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 #pragma once
-#include "nds.h"
+#include "bbuf.h"
+#include "concurr.h"
 
-namespace vlg {
+namespace nds {
+struct peer;
 
-#if defined WIN32 && defined _MSC_VER
-RetCode WSA_init(std::shared_ptr<spdlog::logger> &log);
-RetCode WSA_destroy(std::shared_ptr<spdlog::logger> &log);
-#endif
+enum PktChasingStatus {
+    PktChasingStatus_BodyLen,
+    PktChasingStatus_Body
+};
+
+/*****************************************
+CONNECTION TYPE
+******************************************/
+typedef enum  {
+    ConnectionType_UNDEFINED,
+    ConnectionType_INGOING,
+    ConnectionType_OUTGOING,
+} ConnectionType;
+
+/*****************************************
+CONNECTION STATUS
+******************************************/
+typedef enum  {
+    ConnectionStatus_DISCONNECTED,
+    ConnectionStatus_ESTABLISHED,
+} ConnectionStatus;
+
+struct connection {
+
+    connection(ConnectionType ct);
+
+    const char *get_host_ip() const;
+    unsigned short get_host_port() const;
+
+    RetCode set_socket_blocking_mode(bool blocking);
+    RetCode sckt_hndl_err(long sock_op_res);
+    RetCode establish_connection(sockaddr_in &params);
+    RetCode set_connection_established();
+    RetCode close_connection();
+    RetCode socket_shutdown();
+
+    RetCode recv_pkt();
+
+    RetCode recv_bytes();
+    RetCode chase_pkt();
+    RetCode read_decode_hdr();
+
+    void reset_rdn_outg_rep();
+    RetCode send_acc_buff();
+
+    ConnectionType con_type_;
+    ConnectionStatus status_;
+    SOCKET socket_;
+    struct sockaddr_in addr_;
+
+    //reading rep
+    PktChasingStatus pkt_ch_st_;
+    unsigned int bdy_bytelen_;
+    g_bbuf rdn_buff_;
+    g_bbuf curr_rdn_body_;
+
+    //accumulating sending buffer
+    g_bbuf acc_snd_buff_;
+};
 
 struct acceptor {
-    acceptor(broker_impl &broker);
+    acceptor(peer &p);
     ~acceptor();
 
     RetCode set_sockaddr_in(sockaddr_in &serv_sockaddr_in);
     RetCode create_server_socket(SOCKET &serv_socket);
-    RetCode accept(unsigned int new_connid, std::shared_ptr<incoming_connection> &new_connection);
+    RetCode accept(unsigned int new_connid, std::shared_ptr<connection> &new_connection);
 
-    broker_impl &broker_;
+    peer &peer_;
     SOCKET serv_socket_;
     sockaddr_in serv_sockaddr_in_;
 };
@@ -44,27 +101,24 @@ struct acceptor {
 /*****************************************
 SELECTOR EVTS
 ******************************************/
-enum VLG_SELECTOR_Evt {
-    VLG_SELECTOR_Evt_Undef,
-    VLG_SELECTOR_Evt_Interrupt,
-    VLG_SELECTOR_Evt_SendPacket,
-    VLG_SELECTOR_Evt_ConnectRequest,
-    VLG_SELECTOR_Evt_Disconnect,
-    VLG_SELECTOR_Evt_ConnReqAccepted,
-    VLG_SELECTOR_Evt_ConnReqRefused,
-    VLG_SELECTOR_Evt_Inactivity,
+enum NDS_SELECTOR_Evt {
+    NDS_SELECTOR_Evt_Undef,
+    NDS_SELECTOR_Evt_Interrupt,
+    NDS_SELECTOR_Evt_SendPacket,
+    NDS_SELECTOR_Evt_ConnectRequest,
+    NDS_SELECTOR_Evt_Disconnect,
 };
 
 // sel_evt
 
 struct sel_evt {
-    explicit sel_evt(VLG_SELECTOR_Evt evt, conn_impl *conn);
-    explicit sel_evt(VLG_SELECTOR_Evt evt, std::shared_ptr<incoming_connection> &conn);
+    explicit sel_evt(NDS_SELECTOR_Evt evt, connection *conn);
+    explicit sel_evt(NDS_SELECTOR_Evt evt, std::shared_ptr<connection> &conn);
 
-    VLG_SELECTOR_Evt evt_;
+    NDS_SELECTOR_Evt evt_;
     ConnectionType con_type_;
-    conn_impl *conn_;
-    std::shared_ptr<incoming_connection> inco_conn_;
+    connection *conn_;
+    std::shared_ptr<connection> inco_conn_;
     SOCKET socket_;
     sockaddr_in saddr_;
 };
@@ -88,7 +142,7 @@ enum SelectorStatus {
 // selector
 
 struct selector : public th {
-    explicit selector(broker_impl &);
+    explicit selector(peer &);
     virtual ~selector();
 
     RetCode init();
@@ -120,16 +174,14 @@ struct selector : public th {
     RetCode server_socket_shutdown();
     RetCode consume_events();
     RetCode consume_inco_sock_events();
-    RetCode add_early_outg_conn(sel_evt *);
-    RetCode promote_early_outg_conn(outgoing_connection_impl *);
-    RetCode delete_early_outg_conn(outgoing_connection_impl *);
+    RetCode add_outg_conn(sel_evt *);
     RetCode manage_disconnect_conn(sel_evt *);
     RetCode stop_and_clean();
-    RetCode inco_conn_process_rdn_buff(std::shared_ptr<incoming_connection> &);
-    RetCode outg_conn_process_rdn_buff(outgoing_connection_impl *);
+    RetCode inco_conn_process_rdn_buff(std::shared_ptr<connection> &);
+    RetCode outg_conn_process_rdn_buff(connection *);
 
     //rep
-    broker_impl &broker_;
+    peer &peer_;
     SelectorStatus status_;
     fd_set read_FDs_, write_FDs_;
 
@@ -147,12 +199,12 @@ struct selector : public th {
     SOCKET srv_socket_;
     sockaddr_in srv_sockaddr_in_;
     acceptor srv_acceptor_;
-    std::unordered_map<uint64_t, std::shared_ptr<incoming_connection>> inco_conn_map_;
-    std::unordered_map<uint64_t, std::shared_ptr<incoming_connection>> wp_inco_conn_map_;
+    std::unordered_map<uint64_t, std::shared_ptr<connection>> inco_conn_map_;
+    std::unordered_map<uint64_t, std::shared_ptr<connection>> wp_inco_conn_map_;
 
     //outgoing
-    std::unordered_map<uint64_t, outgoing_connection_impl *> outg_conn_map_;
-    std::unordered_map<uint64_t, outgoing_connection_impl *> wp_outg_conn_map_;
+    std::unordered_map<uint64_t, connection *> outg_conn_map_;
+    std::unordered_map<uint64_t, connection *> wp_outg_conn_map_;
 };
 
 }

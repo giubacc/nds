@@ -22,7 +22,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define GBB_DF_CPTY 32
 
-namespace vlg {
+namespace nds {
 
 // grow_byte_buffer
 

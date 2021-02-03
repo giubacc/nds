@@ -20,13 +20,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #pragma once
 #include "nds.h"
+#include <queue>
 #include <thread>
 
 namespace spdlog {
 class logger;
 }
 
-namespace vlg {
+namespace nds {
 
 /** @brief runnable interface.
 */
@@ -82,6 +83,43 @@ struct th : public runnable {
         runnable *target_;
         std::thread::id id_;
         std::unique_ptr<std::thread> th_;
+};
+
+/** @brief A simple blocking queue
+*/
+template <typename T>
+struct b_qu {
+        b_qu() {}
+
+        void add_msg(T &&msg) {
+            bool wasempty;
+            std::unique_lock<std::mutex> lck(mtx_);
+            wasempty=msg_Queue_.empty();
+            msg_Queue_.push(std::move(msg));
+            if(wasempty) {
+                cv_.notify_all();
+            }
+        }
+
+        T pop_msg() {
+            std::unique_lock<std::mutex> lck(mtx_);
+            while(msg_Queue_.empty()) {
+                cv_.wait(lck);
+            }
+            T msg = msg_Queue_.front();
+            msg_Queue_.pop();
+            return msg;
+        }
+
+        bool empty() const {
+            std::unique_lock<std::mutex> lck(mtx_);
+            return msg_Queue_.empty();
+        }
+
+    private:
+        std::queue<T> msg_Queue_;
+        mutable std::mutex mtx_;
+        mutable std::condition_variable cv_;
 };
 
 }
