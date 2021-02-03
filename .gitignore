@@ -333,5 +333,7 @@ ASALocalRun/
 *.out
 *.o
 ndg
+
 format.bat
 jsoncpp
+spdlog
