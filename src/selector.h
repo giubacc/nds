@@ -24,6 +24,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace nds {
 struct peer;
+struct selector;
 
 enum PktChasingStatus {
     PktChasingStatus_BodyLen,
@@ -49,7 +50,7 @@ typedef enum  {
 
 struct connection {
 
-    connection(ConnectionType ct);
+    connection(selector &sel, ConnectionType ct);
 
     const char *get_host_ip() const;
     unsigned short get_host_port() const;
@@ -69,6 +70,7 @@ struct connection {
 
     void reset_rdn_outg_rep();
     RetCode send_acc_buff();
+    RetCode aggr_msgs_and_send_pkt();
 
     ConnectionType con_type_;
     ConnectionStatus status_;
@@ -81,8 +83,14 @@ struct connection {
     g_bbuf rdn_buff_;
     g_bbuf curr_rdn_body_;
 
+    //packet sending queue
+    b_qu<std::unique_ptr<g_bbuf>> pkt_sending_q_;
+    //current sending packet
+    std::unique_ptr<g_bbuf> cpkt_;
     //accumulating sending buffer
     g_bbuf acc_snd_buff_;
+
+    std::shared_ptr<spdlog::logger> log_;
 };
 
 struct acceptor {
@@ -91,11 +99,13 @@ struct acceptor {
 
     RetCode set_sockaddr_in(sockaddr_in &serv_sockaddr_in);
     RetCode create_server_socket(SOCKET &serv_socket);
-    RetCode accept(unsigned int new_connid, std::shared_ptr<connection> &new_connection);
+    RetCode accept(std::shared_ptr<connection> &new_connection);
 
     peer &peer_;
     SOCKET serv_socket_;
     sockaddr_in serv_sockaddr_in_;
+
+    std::shared_ptr<spdlog::logger> log_;
 };
 
 /*****************************************
@@ -205,6 +215,8 @@ struct selector : public th {
     //outgoing
     std::unordered_map<uint64_t, connection *> outg_conn_map_;
     std::unordered_map<uint64_t, connection *> wp_outg_conn_map_;
+
+    std::shared_ptr<spdlog::logger> log_;
 };
 
 }

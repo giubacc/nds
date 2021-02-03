@@ -55,7 +55,8 @@ selector::selector(peer &p) :
     udp_ntfy_srv_socket_(INVALID_SOCKET),
     udp_ntfy_cli_socket_(INVALID_SOCKET),
     srv_socket_(INVALID_SOCKET),
-    srv_acceptor_(p)
+    srv_acceptor_(p),
+    log_(p.log_)
 {
     memset(&udp_ntfy_sa_in_, 0, sizeof(udp_ntfy_sa_in_));
     udp_ntfy_sa_in_.sin_family = AF_INET;
@@ -91,7 +92,6 @@ RetCode selector::set_status(SelectorStatus status)
     std::unique_lock<std::mutex> lck(mtx_);
     status_ = status;
     cv_.notify_all();
-    IFLOG(peer_.log_, trace(LS_CLO "[status:{}]", __func__, status))
     return RetCode_OK;
 }
 
@@ -115,7 +115,6 @@ RetCode selector::await_for_status_reached(SelectorStatus test,
         }) ? RetCode_OK : RetCode_TIMEOUT;
     }
     current = status_;
-    IFLOG(peer_.log_, trace(LS_CLO "test:{} [{}] current:{}", __func__, test, !rcode ? "reached" : "timeout", status_))
     return rcode;
 }
 
@@ -123,28 +122,27 @@ RetCode selector::create_UDP_notify_srv_sock()
 {
     int res = 0, err = 0;
     if((udp_ntfy_srv_socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != INVALID_SOCKET) {
-        IFLOG(peer_.log_, debug(LS_TRL "[udp_ntfy_srv_socket_:{}][OK]", __func__, udp_ntfy_srv_socket_))
+        log_->debug("[udp_ntfy_srv_socket_:{}][OK]", udp_ntfy_srv_socket_);
         if(!bind(udp_ntfy_srv_socket_, (sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) {
-            IFLOG(peer_.log_, trace(LS_TRL "[udp_ntfy_srv_socket_:{}][bind OK]", __func__, udp_ntfy_srv_socket_))
+            log_->trace("[udp_ntfy_srv_socket_:{}][bind OK]", udp_ntfy_srv_socket_);
             int flags = fcntl(udp_ntfy_srv_socket_, F_GETFL, 0);
             if(flags < 0) {
                 return RetCode_KO;
             }
             flags = (flags|O_NONBLOCK);
             if((res = fcntl(udp_ntfy_srv_socket_, F_SETFL, flags))) {
-                IFLOG(peer_.log_, critical(LS_CLO "[udp_ntfy_srv_socket_:{}][fcntl KO][err:{}]", __func__, udp_ntfy_srv_socket_,
-                                           errno))
+                log_->critical("[udp_ntfy_srv_socket_:{}][fcntl KO][err:{}]", udp_ntfy_srv_socket_, errno);
                 return RetCode_SYSERR;
             } else {
-                IFLOG(peer_.log_, trace(LS_TRL "[udp_ntfy_srv_socket_:{}][fcntl OK]", __func__, udp_ntfy_srv_socket_))
+                log_->trace("[udp_ntfy_srv_socket_:{}][fcntl OK]", udp_ntfy_srv_socket_);
             }
         } else {
             err = errno;
-            IFLOG(peer_.log_, critical(LS_CLO "[udp_ntfy_srv_socket_:{}][bind KO][err:{}]", __func__, udp_ntfy_srv_socket_, err))
+            log_->critical("[udp_ntfy_srv_socket_:{}][bind KO][err:{}]",  udp_ntfy_srv_socket_, err);
             return RetCode_SYSERR;
         }
     } else {
-        IFLOG(peer_.log_, critical(LS_CLO "[socket KO][err:{}]", __func__, err))
+        log_->critical("[socket KO][err:{}]",  err);
         return RetCode_SYSERR;
     }
     return RetCode_OK;
@@ -155,19 +153,19 @@ RetCode selector::connect_UDP_notify_cli_sock()
     int err = 0;
     socklen_t len = sizeof(udp_ntfy_sa_in_);
     getsockname(udp_ntfy_srv_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, &len);
-    IFLOG(peer_.log_, trace(LS_OPN "[sin_addr:{}, sin_port:{}]", __func__,
-                            inet_ntoa(udp_ntfy_sa_in_.sin_addr),
-                            htons(udp_ntfy_sa_in_.sin_port)))
+    log_->trace("[sin_addr:{}, sin_port:{}]",
+                inet_ntoa(udp_ntfy_sa_in_.sin_addr),
+                htons(udp_ntfy_sa_in_.sin_port));
     if((udp_ntfy_cli_socket_ = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET) {
-        IFLOG(peer_.log_, debug(LS_TRL "[udp_ntfy_cli_socket_:{}][OK]", __func__, udp_ntfy_cli_socket_))
+        log_->debug("[udp_ntfy_cli_socket_:{}][OK]", udp_ntfy_cli_socket_);
         if((connect(udp_ntfy_cli_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) != INVALID_SOCKET) {
-            IFLOG(peer_.log_, debug(LS_TRL "[udp_ntfy_cli_socket_:{}][connect OK]", __func__, udp_ntfy_cli_socket_))
+            log_->debug("[udp_ntfy_cli_socket_:{}][connect OK]", udp_ntfy_cli_socket_);
         } else {
-            IFLOG(peer_.log_, critical(LS_CLO "[udp_ntfy_cli_socket_:{}][connect KO][err:{}]", __func__, udp_ntfy_cli_socket_, err))
+            log_->critical("[udp_ntfy_cli_socket_:{}][connect KO][err:{}]", udp_ntfy_cli_socket_, err);
             return RetCode_SYSERR;
         }
     } else {
-        IFLOG(peer_.log_, critical(LS_CLO "[socket KO]", __func__))
+        log_->critical("[socket KO]");
         return RetCode_SYSERR;
     }
     return RetCode_OK;
@@ -188,11 +186,11 @@ RetCode selector::notify(const sel_evt *evt)
         if(err == EAGAIN || err == EWOULDBLOCK) {
             //ok we can go ahead
         } else if(err == ECONNRESET) {
-            IFLOG(peer_.log_, error(LS_CLO "[udp_ntfy_cli_socket_:{}][err:{}]", __func__, udp_ntfy_cli_socket_, err))
+            log_->error("[udp_ntfy_cli_socket_:{}][err:{}]",  udp_ntfy_cli_socket_, err);
             return RetCode_KO;
         } else {
             perror(__func__);
-            IFLOG(peer_.log_, error(LS_CLO "[udp_ntfy_cli_socket_:{}][errno:{}]", __func__, udp_ntfy_cli_socket_, errno))
+            log_->error("[udp_ntfy_cli_socket_:{}][errno:{}]",  udp_ntfy_cli_socket_, errno);
             return RetCode_SYSERR;
         }
     }
@@ -203,7 +201,7 @@ RetCode selector::start_conn_objs()
 {
     RetCode res = RetCode_OK;
     if((res = srv_acceptor_.create_server_socket(srv_socket_))) {
-        IFLOG(peer_.log_, critical(LS_CLO "[starting acceptor, last_err:{}]", __func__, res))
+        log_->critical("[starting acceptor, last_err:{}]",  res);
         return RetCode_KO;
     }
     FD_SET(srv_socket_, &read_FDs_);
@@ -235,7 +233,7 @@ inline RetCode selector::process_inco_sock_outg_events()
 {
     for(auto it = wp_inco_conn_map_.begin(); it != wp_inco_conn_map_.end(); it++) {
         if(FD_ISSET(it->second->socket_, &write_FDs_)) {
-            it->second->send_acc_buff();
+            it->second->aggr_msgs_and_send_pkt();
             if(!(--sel_res_)) {
                 break;
             }
@@ -248,7 +246,7 @@ inline RetCode selector::process_outg_sock_outg_events()
 {
     for(auto it = wp_outg_conn_map_.begin(); it != wp_outg_conn_map_.end(); it++) {
         if(FD_ISSET(it->second->socket_, &write_FDs_)) {
-            it->second->send_acc_buff();
+            it->second->aggr_msgs_and_send_pkt();
             if(!(--sel_res_)) {
                 break;
             }
@@ -277,29 +275,29 @@ RetCode selector::consume_inco_sock_events()
 {
     std::shared_ptr<connection> new_conn_shp;
     if(FD_ISSET(srv_socket_, &read_FDs_)) {
-        if(srv_acceptor_.accept(peer_.next_connid(), new_conn_shp)) {
-            IFLOG(peer_.log_, critical(LS_CLO "[accepting new connection]", __func__))
+        if(srv_acceptor_.accept(new_conn_shp)) {
+            log_->critical("[accepting new connection]");
             return RetCode_KO;
         }
         if(new_conn_shp->set_socket_blocking_mode(false)) {
-            IFLOG(peer_.log_, critical(LS_CLO "[set socket not blocking]", __func__))
+            log_->critical("[set socket not blocking]");
             return RetCode_KO;
         }
         inco_conn_map_[new_conn_shp->socket_] = new_conn_shp;
-        IFLOG(peer_.log_, debug(LS_CON"[socket:{}, host:{}, port:{}][socket accepted]",
-                                new_conn_shp->socket_,
-                                new_conn_shp->get_host_ip(),
-                                new_conn_shp->get_host_port()))
+        log_->debug("[socket:{}, host:{}, port:{}][socket accepted]",
+                    new_conn_shp->socket_,
+                    new_conn_shp->get_host_ip(),
+                    new_conn_shp->get_host_port());
         --sel_res_;
         if(sel_res_) {
             if(process_inco_sock_inco_events()) {
-                IFLOG(peer_.log_, critical(LS_CLO "[processing incoming socket events]", __func__))
+                log_->critical("[processing incoming socket events]");
                 return RetCode_KO;
             }
         }
     } else {
         if(process_inco_sock_inco_events()) {
-            IFLOG(peer_.log_, critical(LS_CLO "[processing incoming socket events]", __func__))
+            log_->critical("[processing incoming socket events]");
             return RetCode_KO;
         }
     }
@@ -393,7 +391,7 @@ inline RetCode selector::add_outg_conn(sel_evt *conn_evt)
         return rcode;
     }
     if(conn_evt->conn_->set_socket_blocking_mode(false)) {
-        IFLOG(peer_.log_, critical(LS_CLO "[setting socket not blocking]", __func__))
+        log_->critical("[setting socket not blocking]");
         return RetCode_KO;
     }
     outg_conn_map_[conn_evt->conn_->socket_] = (connection *)conn_evt->conn_;
@@ -416,7 +414,7 @@ RetCode selector::process_asyn_evts()
     bool conn_still_valid = true;
     while((brecv = recv(udp_ntfy_srv_socket_, (char *)&conn_evt, recv_buf_sz, 0)) > 0) {
         if(brecv != recv_buf_sz) {
-            IFLOG(peer_.log_, critical(LS_CLO "[brecv != recv_buf_sz]", __func__))
+            log_->critical("[brecv != recv_buf_sz]");
             return RetCode_GENERR;
         }
         if(conn_evt->evt_ != NDS_SELECTOR_Evt_Interrupt) {
@@ -440,11 +438,11 @@ RetCode selector::process_asyn_evts()
                         manage_disconnect_conn(conn_evt);
                         break;
                     default:
-                        IFLOG(peer_.log_, critical(LS_CLO "[unknown event]", __func__))
+                        log_->critical("[unknown event]");
                         break;
                 }
             } else {
-                IFLOG(peer_.log_, info(LS_TRL "[socket:{} is no longer valid]", __func__, conn_evt->socket_))
+                log_->info("[socket:{} is no longer valid]", conn_evt->socket_);
             }
         }
         delete conn_evt;
@@ -455,11 +453,11 @@ RetCode selector::process_asyn_evts()
         if(errno == EAGAIN || errno == EWOULDBLOCK) {
             //ok we can go ahead
         } else if(errno == ECONNRESET) {
-            IFLOG(peer_.log_, error(LS_CLO "[err:{}]", __func__, err))
+            log_->error("[err:{}]", err);
             return RetCode_KO;
         } else {
             perror(__func__);
-            IFLOG(peer_.log_, critical(LS_CLO "[errno:{}]", __func__, errno))
+            log_->critical("[errno:{}]", errno);
             return RetCode_SYSERR;
         }
     }
@@ -494,11 +492,9 @@ RetCode selector::server_socket_shutdown()
 {
     int last_err_ = 0;
     if((last_err_ = close(srv_socket_))) {
-        IFLOG(peer_.log_, error(LS_CLO "[socket:{}][closesocket KO][res:{}]", __func__,
-                                srv_socket_, last_err_))
+        log_->error("[socket:{}][closesocket KO][res:{}]", srv_socket_, last_err_);
     } else {
-        IFLOG(peer_.log_, trace(LS_TRL "[socket:{}][closesocket OK][res:{}]", __func__,
-                                srv_socket_, last_err_))
+        log_->trace("[socket:{}][closesocket OK][res:{}]", srv_socket_, last_err_);
     }
     return RetCode_OK;
 }
@@ -546,16 +542,16 @@ void selector::run()
 {
     SelectorStatus current = SelectorStatus_UNDEF;
     if(status_ != SelectorStatus_INIT && status_ != SelectorStatus_REQUEST_READY) {
-        IFLOG(peer_.log_, error(LS_CLO "[status_={}, exp:2][BAD STATUS]", __func__, status_))
+        log_->error("[status_={}, exp:2][BAD STATUS]",  status_);
     }
     do {
-        IFLOG(peer_.log_, debug(LS_SEL"+wait for go-ready request+"))
+        log_->debug("+wait for go-ready request+");
         await_for_status_reached(SelectorStatus_REQUEST_READY, current);
-        IFLOG(peer_.log_, debug(LS_SEL"+go ready requested, going ready+"))
+        log_->debug("+go ready requested, going ready+");
         set_status(SelectorStatus_READY);
-        IFLOG(peer_.log_, debug(LS_SEL"+wait for go-select request+"))
+        log_->debug("+wait for go-select request+");
         await_for_status_reached(SelectorStatus_REQUEST_SELECT, current);
-        IFLOG(peer_.log_, debug(LS_SEL"+go-select requested, going select+"))
+        log_->debug("+go-select requested, going select+");
         set_status(SelectorStatus_SELECT);
         timeval sel_timeout = sel_timeout_;
         while(status_ == SelectorStatus_SELECT) {
@@ -563,29 +559,28 @@ void selector::run()
                 consume_events();
             } else if(!sel_res_) {
                 //timeout
-                IFLOG(peer_.log_, trace(LS_SEL"+select() [timeout]+", __func__))
+                log_->trace("+select() [timeout]+");
             } else {
                 //error
-                IFLOG(peer_.log_, error(LS_SEL"+select() [error:{}]+", __func__, sel_res_))
+                log_->error("+select() [error:{}]+",  sel_res_);
                 set_status(SelectorStatus_ERROR);
             }
             FDSET_sockets();
             sel_timeout = sel_timeout_;
         }
         if(status_ == SelectorStatus_REQUEST_STOP) {
-            IFLOG(peer_.log_, debug(LS_SEL"+stop requested, clean initiated+"))
+            log_->debug("+stop requested, clean initiated+");
             stop_and_clean();
             break;
         }
         if(status_ == SelectorStatus_ERROR) {
-            IFLOG(peer_.log_, error(LS_SEL"+error occurred, clean initiated+"))
+            log_->error("+error occurred, clean initiated+");
             stop_and_clean();
             break;
         }
     } while(true);
     set_status(SelectorStatus_STOPPED);
     stop();
-    IFLOG(peer_.log_, trace(LS_CLO, __func__))
 }
 
 }

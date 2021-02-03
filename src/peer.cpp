@@ -27,9 +27,20 @@ namespace nds {
 // peer
 
 peer::peer() :
-    selector_(*this),
-    prgr_conn_id_(0)
-{}
+    selector_(*this)
+{
+    std::time_t tt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::ostringstream os;
+    os << "peer_" << ctime(&tt) << ".log";
+    std::shared_ptr<spdlog::logger> lggr = spdlog::basic_logger_mt("basic_logger", os.str().c_str());
+    lggr->set_level(spdlog::level::level_enum::trace);
+    spdlog::register_logger(lggr);
+}
+
+peer::~peer()
+{
+    spdlog::shutdown();
+}
 
 RetCode peer::init()
 {
@@ -55,26 +66,25 @@ RetCode peer::start()
     SelectorStatus current = SelectorStatus_UNDEF;
     RetCode rcode = RetCode_OK;
 
-    IFLOG(log_, debug(LS_TRL "[start selector thread]", __func__))
+    log_->debug("[start selector thread]");
     selector_.start();
-    IFLOG(log_, debug(LS_TRL "[wait selector go init]", __func__))
+    log_->debug("[wait selector go init]");
     selector_.await_for_status_reached(SelectorStatus_INIT,
                                        current,
                                        NDS_INT_AWT_TIMEOUT,
                                        0);
 
-    IFLOG(log_, debug(LS_TRL "[request selector go ready]", __func__))
+    log_->debug("[request selector go ready]");
     selector_.set_status(SelectorStatus_REQUEST_READY);
-    IFLOG(log_, debug(LS_TRL "[wait selector go ready]", __func__))
+    log_->debug("[wait selector go ready]");
     selector_.await_for_status_reached(SelectorStatus_READY,
                                        current,
                                        NDS_INT_AWT_TIMEOUT,
                                        0);
 
-    IFLOG(log_, debug(LS_TRL "[request selector go selecting]", __func__))
+    log_->debug("[request selector go selecting]");
     selector_.set_status(SelectorStatus_REQUEST_SELECT);
 
-    IFLOG(log_, trace(LS_CLO "[res:{}]", __func__, rcode))
     return rcode;
 }
 
@@ -82,16 +92,15 @@ RetCode peer::stop()
 {
     RetCode rcode = RetCode_OK;
 
-    IFLOG(log_, debug(LS_TRL "[request selector to stop]", __func__))
+    log_->debug("[request selector to stop]");
     selector_.set_status(SelectorStatus_REQUEST_STOP);
     selector_.interrupt();
 
     SelectorStatus current = SelectorStatus_UNDEF;
     selector_.await_for_status_reached(SelectorStatus_STOPPED, current);
-    IFLOG(log_, debug(LS_TRL "[selector stopped]", __func__))
+    log_->debug("[selector stopped]");
     selector_.set_status(SelectorStatus_INIT);
 
-    IFLOG(log_, trace(LS_CLO "[res:{}]", __func__, rcode))
     return rcode;
 }
 

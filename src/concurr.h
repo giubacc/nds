@@ -106,7 +106,7 @@ struct b_qu {
             while(msg_Queue_.empty()) {
                 cv_.wait(lck);
             }
-            T msg = msg_Queue_.front();
+            T msg = std::move(msg_Queue_.front()); //hack
             msg_Queue_.pop();
             return msg;
         }

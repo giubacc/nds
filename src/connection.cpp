@@ -31,14 +31,15 @@ namespace nds {
 
 //connection
 
-connection::connection(ConnectionType ct) :
+connection::connection(selector &sel, ConnectionType ct) :
     con_type_(ct),
     status_(ConnectionStatus_DISCONNECTED),
     socket_(INVALID_SOCKET),
     pkt_ch_st_(PktChasingStatus_BodyLen),
     bdy_bytelen_(0),
     rdn_buff_(RCV_SND_BUF_SZ),
-    acc_snd_buff_(RCV_SND_BUF_SZ)
+    acc_snd_buff_(RCV_SND_BUF_SZ),
+    log_(sel.log_)
 {}
 
 const char *connection::get_host_ip() const
@@ -154,6 +155,10 @@ void connection::reset_rdn_outg_rep()
     rdn_buff_.reset();
     bdy_bytelen_ = 0;
     curr_rdn_body_.reset();
+    while(!pkt_sending_q_.empty()) {
+        pkt_sending_q_.pop_msg();
+    }
+    cpkt_.release();
     acc_snd_buff_.reset();
 }
 
@@ -186,6 +191,40 @@ RetCode connection::send_acc_buff()
             break;
         }
     }
+    return rcode;
+}
+
+RetCode connection::aggr_msgs_and_send_pkt()
+{
+    RetCode rcode = RetCode_OK;
+    /*  1
+        try to fill accumulating buffer with current packet and queued messages.
+    */
+    do {
+        acc_snd_buff_.set_read();
+        while(acc_snd_buff_.available_read() < acc_snd_buff_.capacity()) {
+            if(cpkt_ && cpkt_->available_read()) {
+                acc_snd_buff_.set_write();
+                if(!acc_snd_buff_.append_no_rsz(*cpkt_)) {
+                    //accumulating buffer filled.
+                    break;
+                } else {
+                    //current packet has completely read, it can be replaced.
+                }
+            } else {
+                if(!pkt_sending_q_.empty()) {
+                    cpkt_ = pkt_sending_q_.pop_msg();
+                    cpkt_->set_read();
+                } else {
+                    //current packet read and empty queue
+                    break;
+                }
+            }
+        }
+        /*  2
+            send accumulating buffer
+        */
+    } while(!(rcode = send_acc_buff()) && (cpkt_->available_read() || !pkt_sending_q_.empty()));
     return rcode;
 }
 
@@ -267,7 +306,8 @@ RetCode connection::recv_pkt()
 
 acceptor::acceptor(peer &p) :
     peer_(p),
-    serv_socket_(INVALID_SOCKET)
+    serv_socket_(INVALID_SOCKET),
+    log_(p.log_)
 {
     memset(&serv_sockaddr_in_, 0, sizeof(serv_sockaddr_in_));
 }
@@ -276,7 +316,7 @@ acceptor::~acceptor()
 {
     if(serv_socket_ != INVALID_SOCKET) {
         if(close(serv_socket_) == SOCKET_ERROR) {
-            IFLOG(peer_.log_, error(LS_DTR "closesocket KO", __func__))
+            log_->error("closesocket KO");
         }
     }
 }
@@ -289,34 +329,34 @@ RetCode acceptor::set_sockaddr_in(sockaddr_in &serv_sockaddr_in)
 
 RetCode acceptor::create_server_socket(SOCKET &serv_socket)
 {
-    IFLOG(peer_.log_, info(LS_OPN "[interface:{}, port:{}]",
-                           __func__,
-                           inet_ntoa(serv_sockaddr_in_.sin_addr),
-                           ntohs(serv_sockaddr_in_.sin_port)))
+    log_->info("[interface:{}, port:{}]",
+               inet_ntoa(serv_sockaddr_in_.sin_addr),
+               ntohs(serv_sockaddr_in_.sin_port));
+
     if((serv_socket = serv_socket_ = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
-        IFLOG(peer_.log_, debug(LS_TRL "[socket:{}][OK]", __func__, serv_socket))
+        log_->debug("[socket:{}][OK]", serv_socket);
         if(!bind(serv_socket_, (sockaddr *)&serv_sockaddr_in_, sizeof(sockaddr_in))) {
-            IFLOG(peer_.log_, debug(LS_TRL "[bind OK]", __func__))
+            log_->debug("[bind OK]");
             if(!listen(serv_socket_, SOMAXCONN)) {
-                IFLOG(peer_.log_, debug(LS_TRL "[listen OK]", __func__))
+                log_->debug("[listen OK]");
             } else {
-                IFLOG(peer_.log_, error(LS_CLO "[listen KO]", __func__))
+                log_->error("[listen KO]");
                 return RetCode_SYSERR;
             }
         } else {
             int err = 0;
             err = errno;
-            IFLOG(peer_.log_, error(LS_CLO "[bind KO][err:{}]", __func__, err))
+            log_->error("[bind KO][err:{}]", err);
             return RetCode_SYSERR;
         }
     } else {
-        IFLOG(peer_.log_, error(LS_CLO "[socket KO]", __func__))
+        log_->error("[socket KO]");
         return RetCode_SYSERR;
     }
     return RetCode_OK;
 }
 
-RetCode acceptor::accept(unsigned int new_connid, std::shared_ptr<connection> &new_connection)
+RetCode acceptor::accept(std::shared_ptr<connection> &new_connection)
 {
     SOCKET socket = INVALID_SOCKET;
     struct sockaddr_in addr;
@@ -326,15 +366,13 @@ RetCode acceptor::accept(unsigned int new_connid, std::shared_ptr<connection> &n
     if((socket = ::accept(serv_socket_, (sockaddr *)&addr, &len)) == INVALID_SOCKET) {
         int err = 0;
         err = errno;
-        IFLOG(peer_.log_, error(LS_CLO "[accept KO][err:{}]", __func__, err))
+        log_->error("[accept KO][err:{}]", err);
         return RetCode_SYSERR;
     } else {
-        IFLOG(peer_.log_, debug(LS_TRL "[socket:{}, host:{}, port:{}][accept OK][candidate connid:{}]",
-                                __func__,
-                                socket,
-                                inet_ntoa(addr.sin_addr),
-                                ntohs(addr.sin_port),
-                                new_connid))
+        log_->debug("[socket:{}, host:{}, port:{}][accept OK]",
+                    socket,
+                    inet_ntoa(addr.sin_addr),
+                    ntohs(addr.sin_port));
     }
 
     new_connection->con_type_ = ConnectionType_INGOING;

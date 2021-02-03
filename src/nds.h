@@ -36,36 +36,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <chrono>
+#include <ctime>
+#include <sstream>
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/sinks/basic_file_sink.h"
-
-#define LS_WEL "WL|"
-#define LS_EMP "  |"
-#define LS_SYS "SY|"
-#define LS_CTR "-C|{}"
-#define LS_DTR "~D|{}"
-#define LS_OPN "->|{} "
-#define LS_CLO "<-|{} "
-#define LS_TRL "--|{} "
-#define LS_EXE "EX|{} "
-#define LS_PRS "PS|{} "
-#define LS_SEL "SL|"
-#define LS_OUT ">>|"
-#define LS_INC "<<|"
-#define LS_TRX "TX|"
-#define LS_TXO "T>|"
-#define LS_TXI "T<|"
-#define LS_STM "SM|{} "
-#define LS_QRY "QR|{} "
-#define LS_APL "AP|"
-#define LS_PAR "PA|"
-#define LS_MDL "MD|{} "
-#define LS_DRV "DV|"
-#define LS_CON "CN|"
-#define LS_SBS "SB|"
-#define LS_SBO "S>|"
-#define LS_SBI "S<|"
 
 #define LS_EXUNX " @EXPECT THE UNEXPECTED! "
 
@@ -101,10 +77,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 }
 
 #define NO_ACTION ;
-#define NDSDEFLOG "vlglog"
-
-#define IFLOG(log, meth) if(log) log->meth;
-#define DTOR_TRC(log) IFLOG(log, trace(LS_DTR, __func__))
 
 namespace nds {
 

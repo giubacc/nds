@@ -26,20 +26,16 @@ namespace nds {
 // peer
 struct peer {
     explicit peer();
+    ~peer();
 
     void set_cfg_srv_sin_addr(const char *addr);
     void set_cfg_srv_sin_port(int port);
-
-    unsigned int next_connid() {
-        return ++prgr_conn_id_;
-    }
 
     RetCode init();
     RetCode start();
     RetCode stop();
 
     selector selector_;
-    int prgr_conn_id_;
 
     std::shared_ptr<spdlog::logger> log_;
 };

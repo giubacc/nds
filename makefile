@@ -9,6 +9,7 @@ OUTDIR = .
 INCLUDES = 	-I./src\
 			-I./jsoncpp/include\
 			-I./spdlog/include\
+			-I./clipp/include\
 
 CCFLAGS = -Wall -g
 CCC = g++
