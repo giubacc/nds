@@ -55,6 +55,9 @@ struct peer {
     RetCode stop();
     RetCode wait();
 
+    RetCode set();
+    RetCode get();
+
     cfg cfg_;
     selector selector_;
 

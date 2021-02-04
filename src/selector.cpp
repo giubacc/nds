@@ -82,11 +82,6 @@ RetCode selector::init()
     return RetCode_OK;
 }
 
-RetCode selector::on_broker_move_running_actions()
-{
-    return start_conn_objs();
-}
-
 RetCode selector::set_status(SelectorStatus status)
 {
     std::unique_lock<std::mutex> lck(mtx_);
@@ -122,26 +117,26 @@ RetCode selector::create_UDP_notify_srv_sock()
 {
     int res = 0;
     if((udp_ntfy_srv_socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != INVALID_SOCKET) {
-        log_->debug("[udp_ntfy_srv_socket_:{}][OK]", udp_ntfy_srv_socket_);
+        log_->debug("udp_ntfy_srv_socket_:{}][OK", udp_ntfy_srv_socket_);
         if(!bind(udp_ntfy_srv_socket_, (sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) {
-            log_->trace("[udp_ntfy_srv_socket_:{}][bind OK]", udp_ntfy_srv_socket_);
+            log_->trace("udp_ntfy_srv_socket_:{}][bind OK", udp_ntfy_srv_socket_);
             int flags = fcntl(udp_ntfy_srv_socket_, F_GETFL, 0);
             if(flags < 0) {
                 return RetCode_KO;
             }
             flags = (flags|O_NONBLOCK);
             if((res = fcntl(udp_ntfy_srv_socket_, F_SETFL, flags))) {
-                log_->critical("[udp_ntfy_srv_socket_:{}][fcntl KO][err:{}]", udp_ntfy_srv_socket_, errno);
+                log_->critical("udp_ntfy_srv_socket_:{}][fcntl KO][err:{}", udp_ntfy_srv_socket_, errno);
                 return RetCode_SYSERR;
             } else {
-                log_->trace("[udp_ntfy_srv_socket_:{}][fcntl OK]", udp_ntfy_srv_socket_);
+                log_->trace("udp_ntfy_srv_socket_:{}][fcntl OK", udp_ntfy_srv_socket_);
             }
         } else {
-            log_->critical("[udp_ntfy_srv_socket_:{}][bind KO][err:{}]", udp_ntfy_srv_socket_, errno);
+            log_->critical("udp_ntfy_srv_socket_:{}][bind KO][err:{}", udp_ntfy_srv_socket_, errno);
             return RetCode_SYSERR;
         }
     } else {
-        log_->critical("[socket KO][err:{}]", errno);
+        log_->critical("socket KO][err:{}", errno);
         return RetCode_SYSERR;
     }
     return RetCode_OK;
@@ -152,19 +147,19 @@ RetCode selector::connect_UDP_notify_cli_sock()
     int err = 0;
     socklen_t len = sizeof(udp_ntfy_sa_in_);
     getsockname(udp_ntfy_srv_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, &len);
-    log_->trace("[sin_addr:{}, sin_port:{}]",
+    log_->trace("sin_addr:{}, sin_port:{}",
                 inet_ntoa(udp_ntfy_sa_in_.sin_addr),
                 htons(udp_ntfy_sa_in_.sin_port));
     if((udp_ntfy_cli_socket_ = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET) {
-        log_->debug("[udp_ntfy_cli_socket_:{}][OK]", udp_ntfy_cli_socket_);
+        log_->debug("udp_ntfy_cli_socket_:{}][OK", udp_ntfy_cli_socket_);
         if((connect(udp_ntfy_cli_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) != INVALID_SOCKET) {
-            log_->debug("[udp_ntfy_cli_socket_:{}][connect OK]", udp_ntfy_cli_socket_);
+            log_->debug("udp_ntfy_cli_socket_:{}][connect OK", udp_ntfy_cli_socket_);
         } else {
-            log_->critical("[udp_ntfy_cli_socket_:{}][connect KO][err:{}]", udp_ntfy_cli_socket_, err);
+            log_->critical("udp_ntfy_cli_socket_:{}][connect KO][err:{}", udp_ntfy_cli_socket_, err);
             return RetCode_SYSERR;
         }
     } else {
-        log_->critical("[socket KO]");
+        log_->critical("socket KO");
         return RetCode_SYSERR;
     }
     return RetCode_OK;
@@ -185,11 +180,10 @@ RetCode selector::notify(const sel_evt *evt)
         if(err == EAGAIN || err == EWOULDBLOCK) {
             //ok we can go ahead
         } else if(err == ECONNRESET) {
-            log_->error("[udp_ntfy_cli_socket_:{}][err:{}]",  udp_ntfy_cli_socket_, err);
+            log_->error("udp_ntfy_cli_socket_:{}][err:{}",  udp_ntfy_cli_socket_, err);
             return RetCode_KO;
         } else {
-            perror(__func__);
-            log_->error("[udp_ntfy_cli_socket_:{}][errno:{}]",  udp_ntfy_cli_socket_, errno);
+            log_->error("udp_ntfy_cli_socket_:{}][errno:{}",  udp_ntfy_cli_socket_, errno);
             return RetCode_SYSERR;
         }
     }
@@ -200,7 +194,7 @@ RetCode selector::start_conn_objs()
 {
     RetCode res = RetCode_OK;
     if((res = srv_acceptor_.create_server_socket(srv_socket_))) {
-        log_->critical("[starting acceptor, last_err:{}]",  res);
+        log_->critical("starting acceptor, last_err:{}",  res);
         return RetCode_KO;
     }
     FD_SET(srv_socket_, &read_FDs_);
@@ -275,28 +269,28 @@ RetCode selector::consume_inco_sock_events()
     std::shared_ptr<connection> new_conn_shp;
     if(FD_ISSET(srv_socket_, &read_FDs_)) {
         if(srv_acceptor_.accept(new_conn_shp)) {
-            log_->critical("[accepting new connection]");
+            log_->critical("accepting new connection");
             return RetCode_KO;
         }
         if(new_conn_shp->set_socket_blocking_mode(false)) {
-            log_->critical("[set socket not blocking]");
+            log_->critical("set socket not blocking");
             return RetCode_KO;
         }
         inco_conn_map_[new_conn_shp->socket_] = new_conn_shp;
-        log_->debug("[socket:{}, host:{}, port:{}][socket accepted]",
+        log_->debug("socket:{}, host:{}, port:{}][socket accepted",
                     new_conn_shp->socket_,
                     new_conn_shp->get_host_ip(),
                     new_conn_shp->get_host_port());
         --sel_res_;
         if(sel_res_) {
             if(process_inco_sock_inco_events()) {
-                log_->critical("[processing incoming socket events]");
+                log_->critical("processing incoming socket events");
                 return RetCode_KO;
             }
         }
     } else {
         if(process_inco_sock_inco_events()) {
-            log_->critical("[processing incoming socket events]");
+            log_->critical("processing incoming socket events");
             return RetCode_KO;
         }
     }
@@ -390,7 +384,7 @@ inline RetCode selector::add_outg_conn(sel_evt *conn_evt)
         return rcode;
     }
     if(conn_evt->conn_->set_socket_blocking_mode(false)) {
-        log_->critical("[setting socket not blocking]");
+        log_->critical("setting socket not blocking");
         return RetCode_KO;
     }
     outg_conn_map_[conn_evt->conn_->socket_] = (connection *)conn_evt->conn_;
@@ -413,7 +407,7 @@ RetCode selector::process_asyn_evts()
     bool conn_still_valid = true;
     while((brecv = recv(udp_ntfy_srv_socket_, (char *)&conn_evt, recv_buf_sz, 0)) > 0) {
         if(brecv != recv_buf_sz) {
-            log_->critical("[brecv != recv_buf_sz]");
+            log_->critical("brecv != recv_buf_sz");
             return RetCode_GENERR;
         }
         if(conn_evt->evt_ != NDS_SELECTOR_Evt_Interrupt) {
@@ -437,11 +431,11 @@ RetCode selector::process_asyn_evts()
                         manage_disconnect_conn(conn_evt);
                         break;
                     default:
-                        log_->critical("[unknown event]");
+                        log_->critical("unknown event");
                         break;
                 }
             } else {
-                log_->info("[socket:{} is no longer valid]", conn_evt->socket_);
+                log_->info("socket:{} is no longer valid", conn_evt->socket_);
             }
         }
         delete conn_evt;
@@ -452,11 +446,11 @@ RetCode selector::process_asyn_evts()
         if(errno == EAGAIN || errno == EWOULDBLOCK) {
             //ok we can go ahead
         } else if(errno == ECONNRESET) {
-            log_->error("[err:{}]", err);
+            log_->error("err:{}", err);
             return RetCode_KO;
         } else {
             perror(__func__);
-            log_->critical("[errno:{}]", errno);
+            log_->critical("errno:{}", errno);
             return RetCode_SYSERR;
         }
     }
@@ -491,9 +485,9 @@ RetCode selector::server_socket_shutdown()
 {
     int last_err_ = 0;
     if((last_err_ = close(srv_socket_))) {
-        log_->error("[socket:{}][closesocket KO][res:{}]", srv_socket_, last_err_);
+        log_->error("socket:{}][closesocket KO][res:{}", srv_socket_, last_err_);
     } else {
-        log_->trace("[socket:{}][closesocket OK][res:{}]", srv_socket_, last_err_);
+        log_->trace("socket:{}][closesocket OK][res:{}", srv_socket_, last_err_);
     }
     return RetCode_OK;
 }
@@ -540,9 +534,11 @@ RetCode selector::outg_conn_process_rdn_buff(connection *oci)
 void selector::run()
 {
     SelectorStatus current = SelectorStatus_UNDEF;
+
     if(status_ != SelectorStatus_INIT && status_ != SelectorStatus_REQUEST_READY) {
-        log_->error("[status_={}, exp:2][BAD STATUS]",  status_);
+        log_->error("status_={}, exp:2][BAD STATUS",  status_);
     }
+
     do {
         log_->debug("+wait for go-ready request+");
         await_for_status_reached(SelectorStatus_REQUEST_READY, current);
@@ -551,6 +547,11 @@ void selector::run()
         log_->debug("+wait for go-select request+");
         await_for_status_reached(SelectorStatus_REQUEST_SELECT, current);
         log_->debug("+go-select requested, going select+");
+
+        if(start_conn_objs()) {
+            break;
+        }
+
         set_status(SelectorStatus_SELECT);
         timeval sel_timeout = sel_timeout_;
         while(status_ == SelectorStatus_SELECT) {
@@ -578,6 +579,7 @@ void selector::run()
             break;
         }
     } while(true);
+
     set_status(SelectorStatus_STOPPED);
     stop();
 }

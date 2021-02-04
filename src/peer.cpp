@@ -87,23 +87,23 @@ RetCode peer::start()
     SelectorStatus current = SelectorStatus_UNDEF;
     RetCode rcode = RetCode_OK;
 
-    log_->debug("[start selector thread]");
+    log_->debug("start selector thread");
     selector_.start();
-    log_->debug("[wait selector go init]");
+    log_->debug("wait selector go init");
     selector_.await_for_status_reached(SelectorStatus_INIT,
                                        current,
                                        NDS_INT_AWT_TIMEOUT,
                                        0);
 
-    log_->debug("[request selector go ready]");
+    log_->debug("request selector go ready");
     selector_.set_status(SelectorStatus_REQUEST_READY);
-    log_->debug("[wait selector go ready]");
+    log_->debug("wait selector go ready");
     selector_.await_for_status_reached(SelectorStatus_READY,
                                        current,
                                        NDS_INT_AWT_TIMEOUT,
                                        0);
 
-    log_->debug("[request selector go selecting]");
+    log_->debug("request selector go selecting");
     selector_.set_status(SelectorStatus_REQUEST_SELECT);
 
     return rcode;
@@ -113,13 +113,13 @@ RetCode peer::stop()
 {
     RetCode rcode = RetCode_OK;
 
-    log_->debug("[request selector to stop]");
+    log_->debug("request selector to stop");
     selector_.set_status(SelectorStatus_REQUEST_STOP);
     selector_.interrupt();
 
     SelectorStatus current = SelectorStatus_UNDEF;
     selector_.await_for_status_reached(SelectorStatus_STOPPED, current);
-    log_->debug("[selector stopped]");
+    log_->debug("selector stopped");
     selector_.set_status(SelectorStatus_INIT);
 
     return rcode;
@@ -128,7 +128,7 @@ RetCode peer::stop()
 RetCode peer::wait()
 {
     RetCode rcode = RetCode_OK;
-    log_->info("[wait]");
+    log_->info("going wait ...");
     {
         std::unique_lock<std::mutex> lck(mtx_);
         cv_.wait(lck);
@@ -136,11 +136,46 @@ RetCode peer::wait()
     return rcode;
 }
 
+RetCode peer::set()
+{
+    RetCode rcode = RetCode_OK;
+    log_->debug("attempting set value:{} ...", cfg_.val);
+
+    return rcode;
+}
+
+RetCode peer::get()
+{
+    RetCode rcode = RetCode_OK;
+    log_->debug("attempting get value from cluster ...");
+
+    return rcode;
+}
+
 int peer::run()
 {
     RetCode rcode = RetCode_OK;
-    init();
 
+    set_cfg_srv_sin_port(cfg_.listening_port);
+
+    if((rcode = init())) {
+        return rcode;
+    }
+    if((rcode = start())) {
+        return rcode;
+    }
+
+    if(cfg_.start_node) {
+        wait();
+    } else {
+        if(!cfg_.val.empty()) {
+            set();
+        }
+        if(!cfg_.get) {
+            get();
+        }
+        stop();
+    }
 
     return rcode;
 }

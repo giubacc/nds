@@ -41,11 +41,11 @@ int main(int argc, char *argv[])
                    & clipp::value("listening port", pr.cfg_.listening_port),
 
                    clipp::option("-l", "--log")
-                   .doc("specify logging type [console (default), file name]")
+                   .doc("specify logging type [console (default), file name")
                    & clipp::value("logging type", pr.cfg_.log_type),
 
                    clipp::option("-v", "--verbosity")
-                   .doc("specify logging verbosity [off, trace, info (default), warn, err]")
+                   .doc("specify logging verbosity [off, trace, info (default), warn, err")
                    & clipp::value("logging verbosity", pr.cfg_.log_level),
 
                    clipp::opt_value("set").set(pr.cfg_.val).doc("set the value shared accross the cluster"),

@@ -156,7 +156,6 @@ struct selector : public th {
     virtual ~selector();
 
     RetCode init();
-    RetCode on_broker_move_running_actions();
 
     RetCode await_for_status_reached(SelectorStatus test,
                                      SelectorStatus &current,

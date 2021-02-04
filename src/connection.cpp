@@ -306,8 +306,7 @@ RetCode connection::recv_pkt()
 
 acceptor::acceptor(peer &p) :
     peer_(p),
-    serv_socket_(INVALID_SOCKET),
-    log_(p.log_)
+    serv_socket_(INVALID_SOCKET)
 {
     memset(&serv_sockaddr_in_, 0, sizeof(serv_sockaddr_in_));
 }
@@ -329,28 +328,32 @@ RetCode acceptor::set_sockaddr_in(sockaddr_in &serv_sockaddr_in)
 
 RetCode acceptor::create_server_socket(SOCKET &serv_socket)
 {
-    log_->info("[interface:{}, port:{}]",
+    if(!log_){
+        log_ = peer_.log_;    
+    }   
+
+    log_->info("interface:{}, port:{}",
                inet_ntoa(serv_sockaddr_in_.sin_addr),
                ntohs(serv_sockaddr_in_.sin_port));
 
     if((serv_socket = serv_socket_ = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
-        log_->debug("[socket:{}][OK]", serv_socket);
+        log_->debug("socket:{}][OK", serv_socket);
         if(!bind(serv_socket_, (sockaddr *)&serv_sockaddr_in_, sizeof(sockaddr_in))) {
-            log_->debug("[bind OK]");
+            log_->debug("bind OK");
             if(!listen(serv_socket_, SOMAXCONN)) {
-                log_->debug("[listen OK]");
+                log_->debug("listen OK");
             } else {
-                log_->error("[listen KO]");
+                log_->error("listen KO");
                 return RetCode_SYSERR;
             }
         } else {
             int err = 0;
             err = errno;
-            log_->error("[bind KO][err:{}]", err);
+            log_->error("bind KO][err:{}", err);
             return RetCode_SYSERR;
         }
     } else {
-        log_->error("[socket KO]");
+        log_->error("socket KO");
         return RetCode_SYSERR;
     }
     return RetCode_OK;
@@ -366,10 +369,10 @@ RetCode acceptor::accept(std::shared_ptr<connection> &new_connection)
     if((socket = ::accept(serv_socket_, (sockaddr *)&addr, &len)) == INVALID_SOCKET) {
         int err = 0;
         err = errno;
-        log_->error("[accept KO][err:{}]", err);
+        log_->error("accept KO][err:{}", err);
         return RetCode_SYSERR;
     } else {
-        log_->debug("[socket:{}, host:{}, port:{}][accept OK]",
+        log_->debug("socket:{}, host:{}, port:{}][accept OK",
                     socket,
                     inet_ntoa(addr.sin_addr),
                     ntohs(addr.sin_port));
