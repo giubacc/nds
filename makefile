@@ -18,12 +18,12 @@ LDLIBS= -lpthread
 .cpp.o:
 	$(CCC) $(INCLUDES) $(CCFLAGS) -c $< -o $@
 
-default: ndg
+default: nds
 	
-all: clean ndg
+all: clean nds
 	
-ndg: $(OBJ)
-	$(CCC) -o $(OUTDIR)/ndg $(OBJ) $(LDLIBS)
+nds: $(OBJ)
+	$(CCC) -o $(OUTDIR)/nds $(OBJ) $(LDLIBS)
 
 clean:
-	rm -f $(OBJ) $(OUTDIR)/ndg
+	rm -f $(OBJ) $(OUTDIR)/nds

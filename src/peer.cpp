@@ -28,23 +28,44 @@ namespace nds {
 
 peer::peer() :
     selector_(*this)
-{
-    std::time_t tt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::ostringstream os;
-    os << "peer_" << ctime(&tt) << ".log";
-    std::shared_ptr<spdlog::logger> lggr = spdlog::basic_logger_mt("basic_logger", os.str().c_str());
-    lggr->set_level(spdlog::level::level_enum::trace);
-    spdlog::register_logger(lggr);
-}
+{}
 
 peer::~peer()
 {
     spdlog::shutdown();
 }
 
+spdlog::level::level_enum peer::cfg::get_spdloglvl() const
+{
+    if(log_level == "trace") {
+        return spdlog::level::level_enum::trace;
+    } else if(log_level == "info") {
+        return spdlog::level::level_enum::info;
+    } else if(log_level == "warn") {
+        return spdlog::level::level_enum::warn;
+    } else if(log_level == "err") {
+        return spdlog::level::level_enum::err;
+    } else {
+        return spdlog::level::level_enum::off;
+    }
+}
+
 RetCode peer::init()
 {
     RetCode rcode = RetCode_OK;
+
+    //logger init
+    std::shared_ptr<spdlog::logger> log;
+    if(cfg_.log_type == "console") {
+        log = spdlog::stdout_color_mt("console");
+    } else {
+        log = spdlog::basic_logger_mt("basic_logger", cfg_.log_type);
+    }
+    log->set_pattern("[%H:%M:%S:%e][%t][%^%l%$]%v");
+    log->set_level(cfg_.get_spdloglvl());
+    log_ = log;
+
+    //selector init
     RET_ON_KO(selector_.init())
     return rcode;
 }
@@ -100,6 +121,26 @@ RetCode peer::stop()
     selector_.await_for_status_reached(SelectorStatus_STOPPED, current);
     log_->debug("[selector stopped]");
     selector_.set_status(SelectorStatus_INIT);
+
+    return rcode;
+}
+
+RetCode peer::wait()
+{
+    RetCode rcode = RetCode_OK;
+    log_->info("[wait]");
+    {
+        std::unique_lock<std::mutex> lck(mtx_);
+        cv_.wait(lck);
+    }
+    return rcode;
+}
+
+int peer::run()
+{
+    RetCode rcode = RetCode_OK;
+    init();
+
 
     return rcode;
 }

@@ -19,27 +19,37 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 #include <iostream>
-#include "nds.h"
+#include "peer.h"
 #include "clipp.h"
 
 int main(int argc, char *argv[])
 {
-    bool start_node = false;
-    std::string multicast_address = "239.0.0.82";
-    uint16_t listening_port = 31582;
-    std::string val;
-    bool read = false;
+    nds::peer pr;
 
     auto cli = (
+                   clipp::option("-n", "--node")
+                   .set(pr.cfg_.start_node, true)
+                   .doc("spawn a new node")
+                   & clipp::opt_value("node name", pr.cfg_.node_name),
+
                    clipp::option("-j", "--join")
-                   .set(start_node, true)
-                   .doc("spawn a node and join the cluster") & clipp::opt_value("multicast address", multicast_address),
+                   .doc("join the cluster at specified multicast address")
+                   & clipp::value("multicast address", pr.cfg_.multicast_address),
 
                    clipp::option("-p", "--port")
-                   .doc("spawn a node listening on the specified port") & clipp::opt_value("listening port", listening_port),
+                   .doc("listen on the specified port")
+                   & clipp::value("listening port", pr.cfg_.listening_port),
 
-                   clipp::opt_value("set").set(val).doc("set the value shared accross the cluster"),
-                   clipp::option("read").set(read).doc("read the value shared accross the cluster")
+                   clipp::option("-l", "--log")
+                   .doc("specify logging type [console (default), file name]")
+                   & clipp::value("logging type", pr.cfg_.log_type),
+
+                   clipp::option("-v", "--verbosity")
+                   .doc("specify logging verbosity [off, trace, info (default), warn, err]")
+                   & clipp::value("logging verbosity", pr.cfg_.log_level),
+
+                   clipp::opt_value("set").set(pr.cfg_.val).doc("set the value shared accross the cluster"),
+                   clipp::option("get").set(pr.cfg_.get, true).doc("read the value shared accross the cluster")
                );
 
     if(!clipp::parse(argc, argv, cli)) {
@@ -47,5 +57,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    return 0;
+    int res = pr.run();
+    return res;
 }

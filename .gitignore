@@ -332,7 +332,7 @@ ASALocalRun/
 # Build output for this sample
 *.out
 *.o
-ndg
+nds
 
 format.bat
 jsoncpp

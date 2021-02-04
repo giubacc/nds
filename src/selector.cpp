@@ -55,8 +55,7 @@ selector::selector(peer &p) :
     udp_ntfy_srv_socket_(INVALID_SOCKET),
     udp_ntfy_cli_socket_(INVALID_SOCKET),
     srv_socket_(INVALID_SOCKET),
-    srv_acceptor_(p),
-    log_(p.log_)
+    srv_acceptor_(p)
 {
     memset(&udp_ntfy_sa_in_, 0, sizeof(udp_ntfy_sa_in_));
     udp_ntfy_sa_in_.sin_family = AF_INET;
@@ -75,6 +74,7 @@ selector::~selector()
 
 RetCode selector::init()
 {
+    log_ = peer_.log_;
     RET_ON_KO(srv_acceptor_.set_sockaddr_in(srv_sockaddr_in_))
     RET_ON_KO(create_UDP_notify_srv_sock())
     RET_ON_KO(connect_UDP_notify_cli_sock())
@@ -120,7 +120,7 @@ RetCode selector::await_for_status_reached(SelectorStatus test,
 
 RetCode selector::create_UDP_notify_srv_sock()
 {
-    int res = 0, err = 0;
+    int res = 0;
     if((udp_ntfy_srv_socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != INVALID_SOCKET) {
         log_->debug("[udp_ntfy_srv_socket_:{}][OK]", udp_ntfy_srv_socket_);
         if(!bind(udp_ntfy_srv_socket_, (sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) {
@@ -137,12 +137,11 @@ RetCode selector::create_UDP_notify_srv_sock()
                 log_->trace("[udp_ntfy_srv_socket_:{}][fcntl OK]", udp_ntfy_srv_socket_);
             }
         } else {
-            err = errno;
-            log_->critical("[udp_ntfy_srv_socket_:{}][bind KO][err:{}]",  udp_ntfy_srv_socket_, err);
+            log_->critical("[udp_ntfy_srv_socket_:{}][bind KO][err:{}]", udp_ntfy_srv_socket_, errno);
             return RetCode_SYSERR;
         }
     } else {
-        log_->critical("[socket KO][err:{}]",  err);
+        log_->critical("[socket KO][err:{}]", errno);
         return RetCode_SYSERR;
     }
     return RetCode_OK;

@@ -23,19 +23,43 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace nds {
 
-// peer
+/** @brief a peer
+*/
 struct peer {
+
+    //peer configuration
+    struct cfg {
+        bool start_node = false;
+        std::string node_name = "GendoIkari";
+        std::string multicast_address = "232.232.200.82";
+        uint16_t listening_port = 31582;
+        std::string val;
+        bool get = false;
+
+        std::string log_type = "console";
+        std::string log_level = "info";
+
+        spdlog::level::level_enum get_spdloglvl() const;
+    };
+
     explicit peer();
     ~peer();
 
     void set_cfg_srv_sin_addr(const char *addr);
     void set_cfg_srv_sin_port(int port);
 
+    int run();
+
     RetCode init();
     RetCode start();
     RetCode stop();
+    RetCode wait();
 
+    cfg cfg_;
     selector selector_;
+
+    std::mutex mtx_;
+    std::condition_variable cv_;
 
     std::shared_ptr<spdlog::logger> log_;
 };

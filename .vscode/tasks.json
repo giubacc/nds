@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Main",
+            "label": "Build nds",
             "type": "shell",
             "command": "make",
             "group": {
