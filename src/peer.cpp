@@ -106,6 +106,12 @@ RetCode peer::start()
     log_->debug("request selector go selecting");
     selector_.set_status(SelectorStatus_REQUEST_SELECT);
 
+    selector_.await_for_status_reached(SelectorStatus_SELECT,
+                                       current,
+                                       NDS_INT_AWT_TIMEOUT,
+                                       0);
+
+    log_->debug("selector is selecting");
     return rcode;
 }
 

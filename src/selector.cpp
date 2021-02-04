@@ -117,26 +117,26 @@ RetCode selector::create_UDP_notify_srv_sock()
 {
     int res = 0;
     if((udp_ntfy_srv_socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != INVALID_SOCKET) {
-        log_->debug("udp_ntfy_srv_socket_:{}][OK", udp_ntfy_srv_socket_);
+        log_->debug("udp_ntfy_srv_socket_:{} OK", udp_ntfy_srv_socket_);
         if(!bind(udp_ntfy_srv_socket_, (sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) {
-            log_->trace("udp_ntfy_srv_socket_:{}][bind OK", udp_ntfy_srv_socket_);
+            log_->trace("udp_ntfy_srv_socket_:{} bind OK", udp_ntfy_srv_socket_);
             int flags = fcntl(udp_ntfy_srv_socket_, F_GETFL, 0);
             if(flags < 0) {
                 return RetCode_KO;
             }
             flags = (flags|O_NONBLOCK);
             if((res = fcntl(udp_ntfy_srv_socket_, F_SETFL, flags))) {
-                log_->critical("udp_ntfy_srv_socket_:{}][fcntl KO][err:{}", udp_ntfy_srv_socket_, errno);
+                log_->critical("udp_ntfy_srv_socket_:{} fcntl KO err:{}", udp_ntfy_srv_socket_, errno);
                 return RetCode_SYSERR;
             } else {
-                log_->trace("udp_ntfy_srv_socket_:{}][fcntl OK", udp_ntfy_srv_socket_);
+                log_->trace("udp_ntfy_srv_socket_:{} fcntl OK", udp_ntfy_srv_socket_);
             }
         } else {
-            log_->critical("udp_ntfy_srv_socket_:{}][bind KO][err:{}", udp_ntfy_srv_socket_, errno);
+            log_->critical("udp_ntfy_srv_socket_:{} bind KO err:{}", udp_ntfy_srv_socket_, errno);
             return RetCode_SYSERR;
         }
     } else {
-        log_->critical("socket KO][err:{}", errno);
+        log_->critical("socket KO err:{}", errno);
         return RetCode_SYSERR;
     }
     return RetCode_OK;
@@ -151,11 +151,11 @@ RetCode selector::connect_UDP_notify_cli_sock()
                 inet_ntoa(udp_ntfy_sa_in_.sin_addr),
                 htons(udp_ntfy_sa_in_.sin_port));
     if((udp_ntfy_cli_socket_ = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET) {
-        log_->debug("udp_ntfy_cli_socket_:{}][OK", udp_ntfy_cli_socket_);
+        log_->debug("udp_ntfy_cli_socket_:{} OK", udp_ntfy_cli_socket_);
         if((connect(udp_ntfy_cli_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) != INVALID_SOCKET) {
-            log_->debug("udp_ntfy_cli_socket_:{}][connect OK", udp_ntfy_cli_socket_);
+            log_->debug("udp_ntfy_cli_socket_:{} connect OK", udp_ntfy_cli_socket_);
         } else {
-            log_->critical("udp_ntfy_cli_socket_:{}][connect KO][err:{}", udp_ntfy_cli_socket_, err);
+            log_->critical("udp_ntfy_cli_socket_:{} connect KO err:{}", udp_ntfy_cli_socket_, err);
             return RetCode_SYSERR;
         }
     } else {
@@ -180,10 +180,10 @@ RetCode selector::notify(const sel_evt *evt)
         if(err == EAGAIN || err == EWOULDBLOCK) {
             //ok we can go ahead
         } else if(err == ECONNRESET) {
-            log_->error("udp_ntfy_cli_socket_:{}][err:{}",  udp_ntfy_cli_socket_, err);
+            log_->error("udp_ntfy_cli_socket_:{} err:{}",  udp_ntfy_cli_socket_, err);
             return RetCode_KO;
         } else {
-            log_->error("udp_ntfy_cli_socket_:{}][errno:{}",  udp_ntfy_cli_socket_, errno);
+            log_->error("udp_ntfy_cli_socket_:{} errno:{}",  udp_ntfy_cli_socket_, errno);
             return RetCode_SYSERR;
         }
     }
@@ -277,7 +277,7 @@ RetCode selector::consume_inco_sock_events()
             return RetCode_KO;
         }
         inco_conn_map_[new_conn_shp->socket_] = new_conn_shp;
-        log_->debug("socket:{}, host:{}, port:{}][socket accepted",
+        log_->debug("socket:{}, host:{}, port:{} socket accepted",
                     new_conn_shp->socket_,
                     new_conn_shp->get_host_ip(),
                     new_conn_shp->get_host_port());
@@ -485,9 +485,10 @@ RetCode selector::server_socket_shutdown()
 {
     int last_err_ = 0;
     if((last_err_ = close(srv_socket_))) {
-        log_->error("socket:{}][closesocket KO][res:{}", srv_socket_, last_err_);
+        log_->error("socket:{} close KO res:{}", srv_socket_, last_err_);
     } else {
-        log_->trace("socket:{}][closesocket OK][res:{}", srv_socket_, last_err_);
+        log_->trace("socket:{} close OK res:{}", srv_socket_, last_err_);
+        srv_socket_ = INVALID_SOCKET;
     }
     return RetCode_OK;
 }
@@ -536,7 +537,7 @@ void selector::run()
     SelectorStatus current = SelectorStatus_UNDEF;
 
     if(status_ != SelectorStatus_INIT && status_ != SelectorStatus_REQUEST_READY) {
-        log_->error("status_={}, exp:2][BAD STATUS",  status_);
+        log_->error("status_={}, exp:2 BAD STATUS",  status_);
     }
 
     do {

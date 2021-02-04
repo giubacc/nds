@@ -314,9 +314,7 @@ acceptor::acceptor(peer &p) :
 acceptor::~acceptor()
 {
     if(serv_socket_ != INVALID_SOCKET) {
-        if(close(serv_socket_) == SOCKET_ERROR) {
-            log_->error("closesocket KO");
-        }
+        close(serv_socket_);
     }
 }
 
@@ -328,16 +326,16 @@ RetCode acceptor::set_sockaddr_in(sockaddr_in &serv_sockaddr_in)
 
 RetCode acceptor::create_server_socket(SOCKET &serv_socket)
 {
-    if(!log_){
-        log_ = peer_.log_;    
-    }   
+    if(!log_) {
+        log_ = peer_.log_;
+    }
 
     log_->info("interface:{}, port:{}",
                inet_ntoa(serv_sockaddr_in_.sin_addr),
                ntohs(serv_sockaddr_in_.sin_port));
 
     if((serv_socket = serv_socket_ = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
-        log_->debug("socket:{}][OK", serv_socket);
+        log_->debug("socket:{} OK", serv_socket);
         if(!bind(serv_socket_, (sockaddr *)&serv_sockaddr_in_, sizeof(sockaddr_in))) {
             log_->debug("bind OK");
             if(!listen(serv_socket_, SOMAXCONN)) {
@@ -349,7 +347,7 @@ RetCode acceptor::create_server_socket(SOCKET &serv_socket)
         } else {
             int err = 0;
             err = errno;
-            log_->error("bind KO][err:{}", err);
+            log_->error("bind KO err:{}", err);
             return RetCode_SYSERR;
         }
     } else {
@@ -369,10 +367,10 @@ RetCode acceptor::accept(std::shared_ptr<connection> &new_connection)
     if((socket = ::accept(serv_socket_, (sockaddr *)&addr, &len)) == INVALID_SOCKET) {
         int err = 0;
         err = errno;
-        log_->error("accept KO][err:{}", err);
+        log_->error("accept KO err:{}", err);
         return RetCode_SYSERR;
     } else {
-        log_->debug("socket:{}, host:{}, port:{}][accept OK",
+        log_->debug("socket:{}, host:{}, port:{} accept OK",
                     socket,
                     inet_ntoa(addr.sin_addr),
                     ntohs(addr.sin_port));
