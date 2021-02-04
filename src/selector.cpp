@@ -28,24 +28,12 @@ namespace nds {
 
 //SEL_EVT
 
-sel_evt::sel_evt(NDS_SELECTOR_Evt evt, connection *conn) :
-    evt_(evt),
-    con_type_(conn ? conn->con_type_ : ConnectionType_UNDEFINED),
-    conn_(conn),
-    socket_(conn ? conn->socket_ : INVALID_SOCKET)
-{
-    memset(&saddr_, 0, sizeof(sockaddr_in));
-}
+sel_evt::sel_evt(NDS_SELECTOR_Evt evt) : evt_(evt) {}
 
 sel_evt::sel_evt(NDS_SELECTOR_Evt evt, std::shared_ptr<connection> &conn) :
     evt_(evt),
-    con_type_(ConnectionType_INGOING),
-    conn_(conn.get()),
-    inco_conn_(conn),
-    socket_(conn ? conn->socket_ : INVALID_SOCKET)
-{
-    memset(&saddr_, 0, sizeof(sockaddr_in));
-}
+    conn_(conn)
+{}
 
 selector::selector(peer &p) :
     peer_(p),
@@ -167,7 +155,7 @@ RetCode selector::connect_UDP_notify_cli_sock()
 
 RetCode selector::interrupt()
 {
-    sel_evt *interrupt = new sel_evt(NDS_SELECTOR_Evt_Interrupt, nullptr);
+    sel_evt *interrupt = new sel_evt(NDS_SELECTOR_Evt_Interrupt);
     return notify(interrupt);
 }
 
@@ -272,15 +260,18 @@ RetCode selector::consume_inco_sock_events()
             log_->critical("accepting new connection");
             return RetCode_KO;
         }
+
         if(new_conn_shp->set_socket_blocking_mode(false)) {
             log_->critical("set socket not blocking");
             return RetCode_KO;
         }
+
         inco_conn_map_[new_conn_shp->socket_] = new_conn_shp;
         log_->debug("socket:{}, host:{}, port:{} socket accepted",
                     new_conn_shp->socket_,
                     new_conn_shp->get_host_ip(),
                     new_conn_shp->get_host_port());
+
         --sel_res_;
         if(sel_res_) {
             if(process_inco_sock_inco_events()) {
@@ -380,20 +371,20 @@ inline RetCode selector::manage_disconnect_conn(sel_evt *conn_evt)
 inline RetCode selector::add_outg_conn(sel_evt *conn_evt)
 {
     RetCode rcode = RetCode_OK;
-    if((rcode = conn_evt->conn_->establish_connection(conn_evt->saddr_))) {
+    if((rcode = conn_evt->conn_->establish_connection(conn_evt->conn_->addr_))) {
         return rcode;
     }
     if(conn_evt->conn_->set_socket_blocking_mode(false)) {
         log_->critical("setting socket not blocking");
         return RetCode_KO;
     }
-    outg_conn_map_[conn_evt->conn_->socket_] = (connection *)conn_evt->conn_;
+    outg_conn_map_[conn_evt->conn_->socket_] = conn_evt->conn_;
     return RetCode_OK;
 }
 
 inline bool selector::is_still_valid_connection(const sel_evt *evt)
 {
-    if(evt->con_type_ == ConnectionType_INGOING) {
+    if(evt->conn_->con_type_ == ConnectionType_INGOING) {
         return (inco_conn_map_.find(evt->conn_->socket_) != inco_conn_map_.end());
     } else {
         return (outg_conn_map_.find(evt->conn_->socket_) != outg_conn_map_.end());
@@ -418,10 +409,10 @@ RetCode selector::process_asyn_evts()
             if(conn_still_valid) {
                 switch(conn_evt->evt_) {
                     case NDS_SELECTOR_Evt_SendPacket:
-                        if(conn_evt->con_type_ == ConnectionType_INGOING) {
-                            wp_inco_conn_map_[conn_evt->socket_] = conn_evt->inco_conn_;
+                        if(conn_evt->conn_->con_type_ == ConnectionType_INGOING) {
+                            wp_inco_conn_map_[conn_evt->conn_->socket_] = conn_evt-> conn_;
                         } else {
-                            wp_outg_conn_map_[conn_evt->socket_] = (connection *)conn_evt->conn_;
+                            wp_outg_conn_map_[conn_evt->conn_->socket_] = conn_evt->conn_;
                         }
                         break;
                     case NDS_SELECTOR_Evt_ConnectRequest:
@@ -435,7 +426,7 @@ RetCode selector::process_asyn_evts()
                         break;
                 }
             } else {
-                log_->info("socket:{} is no longer valid", conn_evt->socket_);
+                log_->info("socket:{} is no longer valid", conn_evt->conn_->socket_);
             }
         }
         delete conn_evt;
@@ -523,11 +514,11 @@ RetCode selector::inco_conn_process_rdn_buff(std::shared_ptr<connection> &ic)
     return rcode;
 }
 
-RetCode selector::outg_conn_process_rdn_buff(connection *oci)
+RetCode selector::outg_conn_process_rdn_buff(std::shared_ptr<connection> &oc)
 {
-    RetCode rcode = oci->recv_bytes();
-    while(!(rcode = oci->chase_pkt())) {
-        oci->recv_pkt();
+    RetCode rcode = oc->recv_bytes();
+    while(!(rcode = oc->chase_pkt())) {
+        oc->recv_pkt();
     }
     return rcode;
 }

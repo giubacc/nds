@@ -19,79 +19,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 #pragma once
-#include "bbuf.h"
-#include "concurr.h"
+#include "connection.h"
 
 namespace nds {
 struct peer;
 struct selector;
 
-enum PktChasingStatus {
-    PktChasingStatus_BodyLen,
-    PktChasingStatus_Body
-};
-
-/*****************************************
-CONNECTION TYPE
-******************************************/
-typedef enum  {
-    ConnectionType_UNDEFINED,
-    ConnectionType_INGOING,
-    ConnectionType_OUTGOING,
-} ConnectionType;
-
-/*****************************************
-CONNECTION STATUS
-******************************************/
-typedef enum  {
-    ConnectionStatus_DISCONNECTED,
-    ConnectionStatus_ESTABLISHED,
-} ConnectionStatus;
-
-struct connection {
-
-    connection(selector &sel, ConnectionType ct);
-
-    const char *get_host_ip() const;
-    unsigned short get_host_port() const;
-
-    RetCode set_socket_blocking_mode(bool blocking);
-    RetCode sckt_hndl_err(long sock_op_res);
-    RetCode establish_connection(sockaddr_in &params);
-    RetCode set_connection_established();
-    RetCode close_connection();
-    RetCode socket_shutdown();
-
-    RetCode recv_pkt();
-
-    RetCode recv_bytes();
-    RetCode chase_pkt();
-    RetCode read_decode_hdr();
-
-    void reset_rdn_outg_rep();
-    RetCode send_acc_buff();
-    RetCode aggr_msgs_and_send_pkt();
-
-    ConnectionType con_type_;
-    ConnectionStatus status_;
-    SOCKET socket_;
-    struct sockaddr_in addr_;
-
-    //reading rep
-    PktChasingStatus pkt_ch_st_;
-    unsigned int bdy_bytelen_;
-    g_bbuf rdn_buff_;
-    g_bbuf curr_rdn_body_;
-
-    //packet sending queue
-    b_qu<std::unique_ptr<g_bbuf>> pkt_sending_q_;
-    //current sending packet
-    std::unique_ptr<g_bbuf> cpkt_;
-    //accumulating sending buffer
-    g_bbuf acc_snd_buff_;
-
-    std::shared_ptr<spdlog::logger> log_;
-};
+// acceptor
 
 struct acceptor {
     acceptor(peer &p);
@@ -122,15 +56,11 @@ enum NDS_SELECTOR_Evt {
 // sel_evt
 
 struct sel_evt {
-    explicit sel_evt(NDS_SELECTOR_Evt evt, connection *conn);
+    explicit sel_evt(NDS_SELECTOR_Evt evt);
     explicit sel_evt(NDS_SELECTOR_Evt evt, std::shared_ptr<connection> &conn);
 
     NDS_SELECTOR_Evt evt_;
-    ConnectionType con_type_;
-    connection *conn_;
-    std::shared_ptr<connection> inco_conn_;
-    SOCKET socket_;
-    sockaddr_in saddr_;
+    std::shared_ptr<connection> conn_;
 };
 
 // SelectorStatus
@@ -166,28 +96,37 @@ struct selector : public th {
     RetCode process_asyn_evts();
     RetCode interrupt();
     RetCode set_status(SelectorStatus);
+
     virtual void run() override;
+
     RetCode create_UDP_notify_srv_sock();
     RetCode connect_UDP_notify_cli_sock();
+
     bool is_still_valid_connection(const sel_evt *);
     RetCode process_inco_sock_inco_events();
     RetCode process_inco_sock_outg_events();
     RetCode process_outg_sock_inco_events();
     RetCode process_outg_sock_outg_events();
+
     RetCode start_conn_objs();
+
     void FDSET_sockets();
     void FDSET_incoming_sockets();
     void FDSET_outgoing_sockets();
     void FDSET_write_incoming_pending_sockets();
     void FDSET_write_outgoing_pending_sockets();
+
     RetCode server_socket_shutdown();
+
     RetCode consume_events();
     RetCode consume_inco_sock_events();
+
     RetCode add_outg_conn(sel_evt *);
     RetCode manage_disconnect_conn(sel_evt *);
+
     RetCode stop_and_clean();
     RetCode inco_conn_process_rdn_buff(std::shared_ptr<connection> &);
-    RetCode outg_conn_process_rdn_buff(connection *);
+    RetCode outg_conn_process_rdn_buff(std::shared_ptr<connection> &);
 
     //rep
     peer &peer_;
@@ -208,12 +147,13 @@ struct selector : public th {
     SOCKET srv_socket_;
     sockaddr_in srv_sockaddr_in_;
     acceptor srv_acceptor_;
-    std::unordered_map<uint64_t, std::shared_ptr<connection>> inco_conn_map_;
-    std::unordered_map<uint64_t, std::shared_ptr<connection>> wp_inco_conn_map_;
+
+    std::unordered_map<SOCKET, std::shared_ptr<connection>> inco_conn_map_;
+    std::unordered_map<SOCKET, std::shared_ptr<connection>> wp_inco_conn_map_;
 
     //outgoing
-    std::unordered_map<uint64_t, connection *> outg_conn_map_;
-    std::unordered_map<uint64_t, connection *> wp_outg_conn_map_;
+    std::unordered_map<SOCKET, std::shared_ptr<connection>> outg_conn_map_;
+    std::unordered_map<SOCKET, std::shared_ptr<connection>> wp_outg_conn_map_;
 
     std::shared_ptr<spdlog::logger> log_;
 };
