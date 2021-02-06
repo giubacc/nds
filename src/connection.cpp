@@ -401,18 +401,25 @@ RetCode connection::aggr_msgs_and_send_pkt()
     return rcode;
 }
 
-RetCode connection::recv_bytes()
+RetCode connection::recv_bytes(char *src_ip)
 {
     RetCode rcode = RetCode_OK;
     rdn_buff_.set_write();
     long brecv = 0, buf_rem_len = (long)rdn_buff_.remaining();
-    while(buf_rem_len && ((brecv = recv(socket_,
-                                        &rdn_buff_.buf_[rdn_buff_.pos_],
-                                        buf_rem_len, 0)) > 0)) {
+    struct sockaddr_in src_addr;
+    socklen_t len = sizeof(src_addr);
+
+    while(buf_rem_len && ((brecv = recvfrom(socket_,
+                                            &rdn_buff_.buf_[rdn_buff_.pos_],
+                                            buf_rem_len,
+                                            0,
+                                            (sockaddr *)&src_addr,
+                                            &len)) > 0)) {
         rdn_buff_.move_pos_write(brecv);
         buf_rem_len -= brecv;
+        inet_ntop(AF_INET, &src_addr.sin_addr, src_ip, 16);
     }
-    if(brecv<=0) {
+    if(brecv<0) {
         rcode = sckt_hndl_err(brecv);
     }
     return rcode;
@@ -466,10 +473,12 @@ RetCode connection::chase_pkt()
     return pkt_rdy ? RetCode_OK : rcode;
 }
 
-RetCode connection::recv_pkt()
+RetCode connection::recv_pkt(const char *src_ip)
 {
     RetCode rcode = RetCode_OK;
-    sel_.peer_.incoming_evt_q_.put(event(self_as_shared_ptr(), std::move(curr_rdn_body_)));
+    sel_.peer_.incoming_evt_q_.put(event(self_as_shared_ptr(),
+                                         std::move(curr_rdn_body_),
+                                         src_ip));
     return rcode;
 }
 

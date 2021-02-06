@@ -73,7 +73,7 @@ struct peer {
     uint32_t get_ts() const;
     void set_ts(uint32_t ts);
 
-    void dump_evt(const event &evt);
+    Json::Value evt_to_json(const event &evt);
 
     cfg cfg_;
     selector selector_;

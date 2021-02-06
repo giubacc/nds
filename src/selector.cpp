@@ -54,7 +54,7 @@ RetCode acceptor::create_server_socket(SOCKET &serv_socket)
         log_ = peer_.log_;
     }
 
-    log_->info("interface:{}, port:{}",
+    log_->debug("interface:{}, listening port:{}",
                inet_ntoa(serv_sockaddr_in_.sin_addr),
                ntohs(serv_sockaddr_in_.sin_port));
 
@@ -115,11 +115,14 @@ event::event(EvtType evt, std::shared_ptr<connection> &conn) :
 {}
 
 event::event(std::shared_ptr<connection> &conn,
-             std::unique_ptr<g_bbuf> &&rdn_pkt) :
+             std::unique_ptr<g_bbuf> &&rdn_pkt,
+             const char *src_ip) :
     evt_(PacketAvailable),
     conn_(conn),
     opt_rdn_pkt_(std::move(rdn_pkt))
-{}
+{
+    memcpy(opt_src_ip_, src_ip, sizeof(opt_src_ip_));
+}
 
 selector::selector(peer &p) :
     peer_(p),
@@ -207,7 +210,7 @@ RetCode selector::create_UDP_notify_srv_sock()
     if((udp_ntfy_srv_socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != INVALID_SOCKET) {
         log_->debug("udp_ntfy_srv_socket_:{} OK", udp_ntfy_srv_socket_);
         if(!bind(udp_ntfy_srv_socket_, (sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) {
-            log_->trace("udp_ntfy_srv_socket_:{} bind OK", udp_ntfy_srv_socket_);
+            log_->debug("udp_ntfy_srv_socket_:{} bind OK", udp_ntfy_srv_socket_);
             int flags = fcntl(udp_ntfy_srv_socket_, F_GETFL, 0);
             if(flags < 0) {
                 return RetCode_KO;
@@ -217,7 +220,7 @@ RetCode selector::create_UDP_notify_srv_sock()
                 log_->critical("udp_ntfy_srv_socket_:{} fcntl KO err:{}", udp_ntfy_srv_socket_, errno);
                 return RetCode_SYSERR;
             } else {
-                log_->trace("udp_ntfy_srv_socket_:{} fcntl OK", udp_ntfy_srv_socket_);
+                log_->debug("udp_ntfy_srv_socket_:{} fcntl OK", udp_ntfy_srv_socket_);
             }
         } else {
             log_->critical("udp_ntfy_srv_socket_:{} bind KO err:{}", udp_ntfy_srv_socket_, errno);
@@ -235,7 +238,7 @@ RetCode selector::connect_UDP_notify_cli_sock()
     int err = 0;
     socklen_t len = sizeof(udp_ntfy_sa_in_);
     getsockname(udp_ntfy_srv_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, &len);
-    log_->trace("sin_addr:{}, sin_port:{}",
+    log_->debug("sin_addr:{}, sin_port:{}",
                 inet_ntoa(udp_ntfy_sa_in_.sin_addr),
                 htons(udp_ntfy_sa_in_.sin_port));
     if((udp_ntfy_cli_socket_ = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET) {
@@ -531,7 +534,7 @@ RetCode selector::process_asyn_evts()
                         break;
                 }
             } else {
-                log_->info("socket:{} is no longer valid", conn_evt->conn_->socket_);
+                log_->debug("socket:{} is no longer valid", conn_evt->conn_->socket_);
             }
         }
         delete conn_evt;
@@ -589,7 +592,7 @@ RetCode selector::server_socket_shutdown()
     if((last_err_ = close(srv_socket_))) {
         log_->error("socket:{} close KO res:{}", srv_socket_, last_err_);
     } else {
-        log_->trace("socket:{} close OK res:{}", srv_socket_, last_err_);
+        log_->debug("socket:{} close OK res:{}", srv_socket_, last_err_);
         srv_socket_ = INVALID_SOCKET;
     }
     return RetCode_OK;
@@ -618,9 +621,10 @@ RetCode selector::stop_and_clean()
 
 RetCode selector::conn_process_rdn_buff(std::shared_ptr<connection> &conn)
 {
-    RetCode rcode = conn->recv_bytes();
+    char src_ip[16];
+    RetCode rcode = conn->recv_bytes(src_ip);
     while(!(rcode = conn->chase_pkt())) {
-        conn->recv_pkt();
+        conn->recv_pkt(src_ip);
     }
     return rcode;
 }
@@ -650,11 +654,11 @@ void selector::run()
         timeval sel_timeout = sel_timeout_;
         while(status_ == SelectorStatus_SELECT) {
             if((sel_res_ = select(nfds_+1, &read_FDs_, &write_FDs_, 0, 0)) > 0) {
-                log_->trace("+select() [interrupt]+");
+                log_->debug("+select() [interrupt]+");
                 consume_events();
             } else if(!sel_res_) {
                 //timeout
-                log_->trace("+select() [timeout]+");
+                log_->debug("+select() [timeout]+");
             } else {
                 //error
                 log_->error("+select() [error:{}]+",  sel_res_);

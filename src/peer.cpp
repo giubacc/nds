@@ -131,11 +131,14 @@ RetCode peer::stop()
 RetCode peer::process_incoming_events()
 {
     RetCode rcode = RetCode_OK;
-    log_->info("processing incoming events ...");
+    log_->debug("processing incoming events ...");
 
     while(true) {
         event evt = incoming_evt_q_.get();
-        dump_evt(evt);
+        Json::Value json_evt = evt_to_json(evt);
+
+
+
     }
 
     return rcode;
@@ -216,20 +219,21 @@ void peer::set_ts(uint32_t ts)
     ts_ = ts;
 }
 
-void peer::dump_evt(const event &evt)
+Json::Value peer::evt_to_json(const event &evt)
 {
     std::string pkts(evt.opt_rdn_pkt_->buf_, evt.opt_rdn_pkt_->available_read());
     std::istringstream istr(pkts);
     Json::Value jpkt;
     istr >> jpkt;
-    log_->trace("recv:\n{}", jpkt.toStyledString());
+    jpkt[pkt_ip] = evt.opt_src_ip_;
+    log_->debug("evt:\n{}", jpkt.toStyledString());
+    return jpkt;
 }
 
 Json::Value peer::build_alive_node_msg() const
 {
     Json::Value alive_node_msg;
     alive_node_msg[pkt_type] = pkt_type_alive_node;
-    alive_node_msg[pkt_ip] = "test";
     alive_node_msg[pkt_port] = cfg_.listening_port;
     alive_node_msg[pkt_ts] = get_ts();
     return alive_node_msg;

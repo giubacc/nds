@@ -71,8 +71,8 @@ struct connection {
     void reset_rdn_outg_rep();
 
     //receiving, used by both TCP/UDP connections
-    RetCode recv_pkt();
-    RetCode recv_bytes();
+    RetCode recv_bytes(char *src_ip);
+    RetCode recv_pkt(const char *src_ip);
     RetCode chase_pkt();
     RetCode read_decode_hdr();
 

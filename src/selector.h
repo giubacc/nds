@@ -40,11 +40,15 @@ struct event {
     explicit event();
     explicit event(EvtType evt);
     explicit event(EvtType evt, std::shared_ptr<connection> &conn);
-    explicit event(std::shared_ptr<connection> &conn, std::unique_ptr<g_bbuf> &&rdn_pkt);
+
+    explicit event(std::shared_ptr<connection> &conn,
+                   std::unique_ptr<g_bbuf> &&rdn_pkt,
+                   const char *src_ip);
 
     EvtType evt_;
     std::shared_ptr<connection> conn_;
     std::unique_ptr<g_bbuf> opt_rdn_pkt_;
+    char opt_src_ip_[16] = {0};
 };
 
 // acceptor
