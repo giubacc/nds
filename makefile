@@ -2,7 +2,10 @@ SRC = 	./src/main.cpp\
 		./src/bbuf.cpp\
 		./src/selector.cpp\
 		./src/connection.cpp\
-		./src/peer.cpp
+		./src/peer.cpp\
+		./jsoncpp/src/lib_json/json_reader.cpp\
+		./jsoncpp/src/lib_json/json_value.cpp\
+		./jsoncpp/src/lib_json/json_writer.cpp
 		
 OBJ = $(SRC:.cpp=.o)
 OUTDIR = .

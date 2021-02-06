@@ -25,6 +25,28 @@ namespace nds {
 struct peer;
 struct selector;
 
+//event type
+enum EvtType {
+    Undef,
+    Interrupt,
+    ConnectRequest,
+    SendPacket,
+    PacketAvailable,
+    Disconnect,
+};
+
+// event
+struct event {
+    explicit event();
+    explicit event(EvtType evt);
+    explicit event(EvtType evt, std::shared_ptr<connection> &conn);
+    explicit event(std::shared_ptr<connection> &conn, std::unique_ptr<g_bbuf> &&rdn_pkt);
+
+    EvtType evt_;
+    std::shared_ptr<connection> conn_;
+    std::unique_ptr<g_bbuf> opt_rdn_pkt_;
+};
+
 // acceptor
 
 struct acceptor {
@@ -40,27 +62,6 @@ struct acceptor {
     sockaddr_in serv_sockaddr_in_;
 
     std::shared_ptr<spdlog::logger> log_;
-};
-
-/*****************************************
-SELECTOR EVTS
-******************************************/
-enum NDS_SELECTOR_Evt {
-    NDS_SELECTOR_Evt_Undef,
-    NDS_SELECTOR_Evt_Interrupt,
-    NDS_SELECTOR_Evt_SendPacket,
-    NDS_SELECTOR_Evt_ConnectRequest,
-    NDS_SELECTOR_Evt_Disconnect,
-};
-
-// sel_evt
-
-struct sel_evt {
-    explicit sel_evt(NDS_SELECTOR_Evt evt);
-    explicit sel_evt(NDS_SELECTOR_Evt evt, std::shared_ptr<connection> &conn);
-
-    NDS_SELECTOR_Evt evt_;
-    std::shared_ptr<connection> conn_;
 };
 
 // SelectorStatus
@@ -92,7 +93,7 @@ struct selector : public th {
                                      time_t sec = -1,
                                      long nsec = 0);
 
-    RetCode notify(const sel_evt *);
+    RetCode notify(const event *);
     RetCode process_asyn_evts();
     RetCode interrupt();
     RetCode set_status(SelectorStatus);
@@ -102,7 +103,7 @@ struct selector : public th {
     RetCode create_UDP_notify_srv_sock();
     RetCode connect_UDP_notify_cli_sock();
 
-    bool is_still_valid_connection(const sel_evt *);
+    bool is_still_valid_connection(const event *);
     RetCode process_inco_sock_inco_events();
     RetCode process_inco_sock_outg_events();
     RetCode process_outg_sock_inco_events();
@@ -121,8 +122,8 @@ struct selector : public th {
 
     RetCode conn_process_rdn_buff(std::shared_ptr<connection> &);
 
-    RetCode add_outg_conn(sel_evt *);
-    RetCode manage_disconnect_conn(sel_evt *);
+    RetCode add_outg_conn(event *);
+    RetCode manage_disconnect_conn(event *);
 
     RetCode server_socket_shutdown();
     RetCode stop_and_clean();
@@ -155,7 +156,7 @@ struct selector : public th {
     std::unordered_map<SOCKET, std::shared_ptr<connection>> wp_outg_conn_map_;
 
     //UDP Multicast
-    connection mcast_udp_inco_conn_;
+    std::shared_ptr<connection> mcast_udp_inco_conn_;
     connection mcast_udp_outg_conn_;
 
     std::shared_ptr<spdlog::logger> log_;

@@ -34,10 +34,10 @@ enum PktChasingStatus {
 // ConnectionType
 enum ConnectionType {
     ConnectionType_UNDEFINED,
-    ConnectionType_INGOING,             //TCP ingoing
-    ConnectionType_OUTGOING,            //TCP outgoing
-    ConnectionType_UDP_MCAST_INGOING,  //UDP ingoing multicast
-    ConnectionType_UDP_MCAST_OUTGOING,  //UDP outgoing multicast
+    ConnectionType_TCP_INGOING,     //TCP ingoing
+    ConnectionType_TCP_OUTGOING,    //TCP outgoing
+    ConnectionType_UDP_INGOING,     //UDP ingoing multicast
+    ConnectionType_UDP_OUTGOING,    //UDP outgoing multicast
 };
 
 // ConnectionStatus
@@ -49,6 +49,8 @@ enum ConnectionStatus {
 struct connection {
 
     connection(selector &sel, ConnectionType ct);
+
+    std::shared_ptr<connection> &self_as_shared_ptr();
 
     const char *get_host_ip() const;
     unsigned short get_host_port() const;
@@ -78,10 +80,19 @@ struct connection {
     RetCode send_acc_buff();
     RetCode aggr_msgs_and_send_pkt();
 
+    //send a string as a packet
+    RetCode send(const std::string &pkt);
+
+    //send as stream, only used by TCP connections
+    RetCode send_stream(const std::string &pkt);
+
     //single datagram sending, only used by UDP connections
-    RetCode send_datagram();
+    RetCode send_datagram(const std::string &pkt);
 
     void on_established();
+
+    //parent
+    selector &sel_;
 
     ConnectionType con_type_;
     ConnectionStatus status_;
@@ -92,7 +103,7 @@ struct connection {
     PktChasingStatus pkt_ch_st_;
     unsigned int bdy_bytelen_;
     g_bbuf rdn_buff_;
-    g_bbuf curr_rdn_body_;
+    std::unique_ptr<g_bbuf> curr_rdn_body_;
 
     //packet sending queue
     b_qu<std::unique_ptr<g_bbuf>> pkt_sending_q_;

@@ -23,6 +23,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace nds {
 
+extern const std::string pkt_type;
+extern const std::string pkt_type_alive_node;
+extern const std::string pkt_type_fail_node;
+extern const std::string pkt_type_data;
+extern const std::string pkt_ip;
+extern const std::string pkt_port;
+extern const std::string pkt_ts;
+extern const std::string pkt_data;
+
 /** @brief a peer
 */
 struct peer {
@@ -45,24 +54,35 @@ struct peer {
     explicit peer();
     ~peer();
 
-    void set_cfg_srv_sin_addr(const char *addr);
-    void set_cfg_srv_sin_port(int port);
-
     int run();
 
     RetCode init();
     RetCode start();
     RetCode stop();
-    RetCode wait();
+    RetCode process_incoming_events();
 
     RetCode set();
     RetCode get();
 
+    RetCode send_alive_node_msg();
+    Json::Value build_alive_node_msg() const;
+
+    RetCode send_packet(const Json::Value &pkt, connection &conn);
+
+    uint32_t gen_ts() const;
+    uint32_t get_ts() const;
+    void set_ts(uint32_t ts);
+
+    void dump_evt(const event &evt);
+
     cfg cfg_;
     selector selector_;
-
     std::mutex mtx_;
     std::condition_variable cv_;
+    b_qu<event> incoming_evt_q_;
+
+    //protocol dependant rep
+    uint32_t ts_ = 0;
 
     std::shared_ptr<spdlog::logger> log_;
 };

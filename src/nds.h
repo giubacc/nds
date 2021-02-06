@@ -42,8 +42,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/sinks/basic_file_sink.h"
+#include "json/json.h"
 
-#define LS_EXUNX " @EXPECT THE UNEXPECTED! "
 
 #define RET_ON_KO(fun)\
 {\
@@ -53,30 +53,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     }\
 }
 
-#define CMD_ON_OK(fun, cmd)\
-{\
-    int res;\
-    if(!(res = fun)){\
-        cmd;\
-    }\
-}
-
-#define CMD_ON_KO(fun, cmd)\
-{\
-    int res;\
-    if((res = fun)){\
-        cmd;\
-    }\
-}
-
 #define CMD_ON_NUL(ptr, cmd)\
 {\
     if(!(ptr)){\
         cmd;\
     }\
 }
-
-#define NO_ACTION ;
 
 namespace nds {
 

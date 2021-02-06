@@ -24,6 +24,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace nds {
 
+const std::string pkt_type              = "_pt";
+const std::string pkt_type_alive_node   = "an";
+const std::string pkt_type_fail_node    = "fn";
+const std::string pkt_type_data         = "dt";
+const std::string pkt_ip                = "_ip";
+const std::string pkt_port              = "_po";
+const std::string pkt_ts                = "_ts";
+const std::string pkt_data              = "_dt";
+
 // peer
 
 peer::peer() :
@@ -68,18 +77,6 @@ RetCode peer::init()
     //selector init
     RET_ON_KO(selector_.init())
     return rcode;
-}
-
-// CONFIG SETTERS
-
-void peer::set_cfg_srv_sin_addr(const char *addr)
-{
-    selector_.srv_sockaddr_in_.sin_addr.s_addr = inet_addr(addr);
-}
-
-void peer::set_cfg_srv_sin_port(int port)
-{
-    selector_.srv_sockaddr_in_.sin_port = htons(port);
 }
 
 RetCode peer::start()
@@ -131,14 +128,16 @@ RetCode peer::stop()
     return rcode;
 }
 
-RetCode peer::wait()
+RetCode peer::process_incoming_events()
 {
     RetCode rcode = RetCode_OK;
-    log_->info("going wait ...");
-    {
-        std::unique_lock<std::mutex> lck(mtx_);
-        cv_.wait(lck);
+    log_->info("processing incoming events ...");
+
+    while(true) {
+        event evt = incoming_evt_q_.get();
+        dump_evt(evt);
     }
+
     return rcode;
 }
 
@@ -161,8 +160,7 @@ RetCode peer::get()
 int peer::run()
 {
     RetCode rcode = RetCode_OK;
-
-    set_cfg_srv_sin_port(cfg_.listening_port);
+    selector_.srv_sockaddr_in_.sin_port = htons(cfg_.listening_port);
 
     if((rcode = init())) {
         return rcode;
@@ -171,8 +169,12 @@ int peer::run()
         return rcode;
     }
 
+    if((rcode = send_alive_node_msg())) {
+        return rcode;
+    }
+
     if(cfg_.start_node) {
-        wait();
+        process_incoming_events();
     } else {
         if(!cfg_.val.empty()) {
             set();
@@ -184,6 +186,53 @@ int peer::run()
     }
 
     return rcode;
+}
+
+RetCode peer::send_alive_node_msg()
+{
+    Json::Value alive_node_msg = build_alive_node_msg();
+    return send_packet(alive_node_msg, selector_.mcast_udp_outg_conn_);
+}
+
+RetCode peer::send_packet(const Json::Value &pkt, connection &conn)
+{
+    std::ostringstream os;
+    os << pkt;
+    return conn.send(os.str());
+}
+
+uint32_t peer::gen_ts() const
+{
+    return (uint32_t)::time(0);
+}
+
+uint32_t peer::get_ts() const
+{
+    return ts_;
+}
+
+void peer::set_ts(uint32_t ts)
+{
+    ts_ = ts;
+}
+
+void peer::dump_evt(const event &evt)
+{
+    std::string pkts(evt.opt_rdn_pkt_->buf_, evt.opt_rdn_pkt_->available_read());
+    std::istringstream istr(pkts);
+    Json::Value jpkt;
+    istr >> jpkt;
+    log_->trace("recv:\n{}", jpkt.toStyledString());
+}
+
+Json::Value peer::build_alive_node_msg() const
+{
+    Json::Value alive_node_msg;
+    alive_node_msg[pkt_type] = pkt_type_alive_node;
+    alive_node_msg[pkt_ip] = "test";
+    alive_node_msg[pkt_port] = cfg_.listening_port;
+    alive_node_msg[pkt_ts] = get_ts();
+    return alive_node_msg;
 }
 
 }

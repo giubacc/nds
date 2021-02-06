@@ -32,16 +32,34 @@ namespace nds {
 //connection
 
 connection::connection(selector &sel, ConnectionType ct) :
+    sel_(sel),
     con_type_(ct),
     status_(ConnectionStatus_DISCONNECTED),
     socket_(INVALID_SOCKET),
     pkt_ch_st_(PktChasingStatus_BodyLen),
     bdy_bytelen_(0),
     rdn_buff_(RCV_SND_BUF_SZ),
-    acc_snd_buff_(RCV_SND_BUF_SZ),
-    log_(sel.log_)
+    acc_snd_buff_(RCV_SND_BUF_SZ)
 {
     memset(&addr_, 0, sizeof(addr_));
+}
+
+std::shared_ptr<connection> &connection::self_as_shared_ptr()
+{
+    if(sel_.mcast_udp_inco_conn_->socket_ == socket_) {
+        return sel_.mcast_udp_inco_conn_;
+    }
+
+    auto it = sel_.inco_conn_map_.find(socket_);
+    if(it != sel_.inco_conn_map_.end()) {
+        return it->second;
+    }
+    it = sel_.outg_conn_map_.find(socket_);
+    if(it != sel_.outg_conn_map_.end()) {
+        return it->second;
+    }
+    log_->critical("self_as_shared_ptr: no such connection, exit");
+    throw;
 }
 
 const char *connection::get_host_ip() const
@@ -120,13 +138,13 @@ RetCode connection::sckt_hndl_err(long sock_op_res)
 
 RetCode connection::establish_multicast(sockaddr_in &params)
 {
-    if(con_type_ != ConnectionType_UDP_MCAST_INGOING &&
-            con_type_ != ConnectionType_UDP_MCAST_OUTGOING) {
+    if(con_type_ != ConnectionType_UDP_INGOING &&
+            con_type_ != ConnectionType_UDP_OUTGOING) {
         return RetCode_KO;
     }
 
     log_->debug("establish_multicast [{}] -> mcast:{} - port:{}",
-                (con_type_ == ConnectionType_UDP_MCAST_INGOING) ? "receiver" : "sender",
+                (con_type_ == ConnectionType_UDP_INGOING) ? "receiver" : "sender",
                 inet_ntoa(params.sin_addr),
                 htons(params.sin_port));
 
@@ -135,7 +153,7 @@ RetCode connection::establish_multicast(sockaddr_in &params)
 
     if((socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != INVALID_SOCKET) {
 
-        if(con_type_ == ConnectionType_UDP_MCAST_OUTGOING) {
+        if(con_type_ == ConnectionType_UDP_OUTGOING) {
             //sender
 
             unsigned char ttl = 2;
@@ -185,8 +203,8 @@ RetCode connection::establish_multicast(sockaddr_in &params)
 
 RetCode connection::establish_connection(sockaddr_in &params)
 {
-    if(con_type_ == ConnectionType_UDP_MCAST_INGOING ||
-            con_type_ == ConnectionType_UDP_MCAST_OUTGOING) {
+    if(con_type_ == ConnectionType_UDP_INGOING ||
+            con_type_ == ConnectionType_UDP_OUTGOING) {
         return RetCode_KO;
     }
 
@@ -229,8 +247,8 @@ RetCode connection::set_connection_established()
         return RetCode_KO;
     }
 
-    if(con_type_ != ConnectionType_UDP_MCAST_INGOING &&
-            con_type_ != ConnectionType_UDP_MCAST_OUTGOING) {
+    if(con_type_ != ConnectionType_UDP_INGOING &&
+            con_type_ != ConnectionType_UDP_OUTGOING) {
         log_->debug("connection established: socket:{}, host:{}, port:{}",
                     socket_,
                     inet_ntoa(addr_.sin_addr),
@@ -266,14 +284,44 @@ void connection::reset_rdn_outg_rep()
     bdy_bytelen_ = 0;
     curr_rdn_body_.reset();
     while(!pkt_sending_q_.empty()) {
-        pkt_sending_q_.pop_msg();
+        pkt_sending_q_.get();
     }
     cpkt_.release();
     acc_snd_buff_.reset();
 }
 
-RetCode connection::send_datagram()
+RetCode connection::send(const std::string &pkt)
 {
+    if(con_type_ == ConnectionType_TCP_INGOING ||
+            con_type_ == ConnectionType_TCP_OUTGOING) {
+        return send_stream(pkt);
+    } else if(con_type_ == ConnectionType_UDP_OUTGOING) {
+        return send_datagram(pkt);
+    }
+    return RetCode_KO;
+}
+
+RetCode connection::send_stream(const std::string &pkt)
+{
+    uint sz = (uint)pkt.size();
+    g_bbuf *ppkt = new g_bbuf(sz+4);
+    ppkt->append_uint(sz);
+    ppkt->append(pkt.c_str(), 0, sz);
+    ppkt->set_read();
+    pkt_sending_q_.put(std::unique_ptr<g_bbuf>(ppkt));
+    sel_.notify(new event(SendPacket, self_as_shared_ptr()));
+    return RetCode_OK;
+}
+
+RetCode connection::send_datagram(const std::string &pkt)
+{
+    acc_snd_buff_.reset();
+    uint sz = (uint)pkt.size();
+    acc_snd_buff_.ensure_capacity(sz+4);
+    acc_snd_buff_.append_uint(sz);
+    acc_snd_buff_.append(pkt.c_str(), 0, sz);
+    acc_snd_buff_.set_read();
+
     int nbytes = sendto(socket_,
                         &acc_snd_buff_.buf_[acc_snd_buff_.pos_],
                         acc_snd_buff_.available_read(),
@@ -297,9 +345,9 @@ RetCode connection::send_acc_buff()
     bool stay = true;
     long bsent = 0, tot_bsent = 0, remaining = (long)acc_snd_buff_.available_read();
     while(stay) {
-        while(remaining && ((bsent = send(socket_,
-                                          &acc_snd_buff_.buf_[acc_snd_buff_.pos_],
-                                          (int)remaining, 0)) > 0)) {
+        while(remaining && ((bsent = ::send(socket_,
+                                            &acc_snd_buff_.buf_[acc_snd_buff_.pos_],
+                                            (int)remaining, 0)) > 0)) {
             acc_snd_buff_.advance_pos_read(bsent);
             tot_bsent += bsent;
             remaining -= bsent;
@@ -338,7 +386,7 @@ RetCode connection::aggr_msgs_and_send_pkt()
                 }
             } else {
                 if(!pkt_sending_q_.empty()) {
-                    cpkt_ = pkt_sending_q_.pop_msg();
+                    cpkt_ = pkt_sending_q_.get();
                     cpkt_->set_read();
                 } else {
                     //current packet read and empty queue
@@ -387,14 +435,14 @@ RetCode connection::chase_pkt()
                 break;
             case PktChasingStatus_Body:
                 if(rdn_buff_.available_read()) {
-                    if(!curr_rdn_body_.position()) {
-                        curr_rdn_body_.ensure_capacity(bdy_bytelen_);
+                    if(!curr_rdn_body_) {
+                        curr_rdn_body_.reset(new g_bbuf(bdy_bytelen_));
                     }
-                    rdn_buff_.read(std::min(curr_rdn_body_.remaining(), rdn_buff_.available_read()), curr_rdn_body_);
-                    if(curr_rdn_body_.remaining()) {
+                    rdn_buff_.read(std::min(curr_rdn_body_->remaining(), rdn_buff_.available_read()), *curr_rdn_body_);
+                    if(curr_rdn_body_->remaining()) {
                         stay = false;
                     } else {
-                        curr_rdn_body_.set_read();
+                        curr_rdn_body_->set_read();
                         pkt_ch_st_ = PktChasingStatus_BodyLen;
                         pkt_rdy = true;
                     }
@@ -421,15 +469,11 @@ RetCode connection::chase_pkt()
 RetCode connection::recv_pkt()
 {
     RetCode rcode = RetCode_OK;
-
-    //@todo
-
+    sel_.peer_.incoming_evt_q_.put(event(self_as_shared_ptr(), std::move(curr_rdn_body_)));
     return rcode;
 }
 
 void connection::on_established()
-{
-    //@todo
-}
+{}
 
 }

@@ -91,33 +91,33 @@ template <typename T>
 struct b_qu {
         b_qu() {}
 
-        void add_msg(T &&msg) {
+        void put(T &&msg) {
             bool wasempty;
             std::unique_lock<std::mutex> lck(mtx_);
-            wasempty=msg_Queue_.empty();
-            msg_Queue_.push(std::move(msg));
+            wasempty=q_.empty();
+            q_.push(std::move(msg));
             if(wasempty) {
                 cv_.notify_all();
             }
         }
 
-        T pop_msg() {
+        T get() {
             std::unique_lock<std::mutex> lck(mtx_);
-            while(msg_Queue_.empty()) {
+            while(q_.empty()) {
                 cv_.wait(lck);
             }
-            T msg = std::move(msg_Queue_.front()); //hack
-            msg_Queue_.pop();
+            T msg = std::move(q_.front()); //bad hack
+            q_.pop();
             return msg;
         }
 
         bool empty() const {
             std::unique_lock<std::mutex> lck(mtx_);
-            return msg_Queue_.empty();
+            return q_.empty();
         }
 
     private:
-        std::queue<T> msg_Queue_;
+        std::queue<T> q_;
         mutable std::mutex mtx_;
         mutable std::condition_variable cv_;
 };
