@@ -29,8 +29,7 @@ int main(int argc, char *argv[])
     auto cli = (
                    clipp::option("-n", "--node")
                    .set(pr.cfg_.start_node, true)
-                   .doc("spawn a new node")
-                   & clipp::opt_value("node name", pr.cfg_.node_name),
+                   .doc("spawn a new node"),
 
                    clipp::option("-j", "--join")
                    .doc("join the cluster at specified multicast address")

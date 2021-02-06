@@ -40,7 +40,9 @@ connection::connection(selector &sel, ConnectionType ct) :
     rdn_buff_(RCV_SND_BUF_SZ),
     acc_snd_buff_(RCV_SND_BUF_SZ),
     log_(sel.log_)
-{}
+{
+    memset(&addr_, 0, sizeof(addr_));
+}
 
 const char *connection::get_host_ip() const
 {
@@ -64,6 +66,16 @@ unsigned short connection::get_host_port() const
     return ntohs(saddr.sin_port);
 }
 
+void connection::set_host_ip(const char *ip)
+{
+    addr_.sin_addr.s_addr = inet_addr(ip);
+}
+
+void connection::set_host_port(unsigned short port)
+{
+    addr_.sin_port = htons(port);
+}
+
 RetCode connection::set_socket_blocking_mode(bool blocking)
 {
     int flags = fcntl(socket_, F_GETFL, 0);
@@ -78,13 +90,12 @@ RetCode connection::sckt_hndl_err(long sock_op_res)
 {
     RetCode rcode = RetCode_OK;
     if(sock_op_res == SOCKET_ERROR) {
-        int last_socket_err = errno;
-        if(last_socket_err == EAGAIN || last_socket_err == EWOULDBLOCK) {
+        int err = errno;
+        if(err == EAGAIN || err == EWOULDBLOCK) {
             rcode = RetCode_SCKWBLK;
-        } else if(last_socket_err == ECONNRESET) {
+        } else if(err == ECONNRESET) {
             rcode = RetCode_SCKCLO;
         } else {
-            perror(__func__);
             rcode = RetCode_SCKERR;
         }
     } else if(!sock_op_res) {
@@ -107,19 +118,101 @@ RetCode connection::sckt_hndl_err(long sock_op_res)
     return rcode;
 }
 
+RetCode connection::establish_multicast(sockaddr_in &params)
+{
+    if(con_type_ != ConnectionType_UDP_MCAST_INGOING &&
+            con_type_ != ConnectionType_UDP_MCAST_OUTGOING) {
+        return RetCode_KO;
+    }
+
+    log_->debug("establish_multicast [{}] -> mcast:{} - port:{}",
+                (con_type_ == ConnectionType_UDP_MCAST_INGOING) ? "receiver" : "sender",
+                inet_ntoa(params.sin_addr),
+                htons(params.sin_port));
+
+    addr_ = params;
+    RetCode rcode = RetCode_OK;
+
+    if((socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != INVALID_SOCKET) {
+
+        if(con_type_ == ConnectionType_UDP_MCAST_OUTGOING) {
+            //sender
+
+            unsigned char ttl = 2;
+            if(setsockopt(socket_, IPPROTO_IP, IP_MULTICAST_TTL, (char *)&ttl, sizeof(ttl)) < 0) {
+                log_->critical("setsockopt IP_MULTICAST_TTL:{}", errno);
+                return RetCode_KO;
+            }
+        } else {
+            //receiver
+
+            u_int yes = 1;
+            if(setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, (char *) &yes, sizeof(yes)) < 0) {
+                log_->critical("setsockopt SO_REUSEADDR:{}", errno);
+                return RetCode_KO;
+            }
+
+            struct sockaddr_in maddr;
+            memset(&maddr, 0, sizeof(maddr));
+            maddr.sin_family = AF_INET;
+            maddr.sin_addr.s_addr = htonl(INADDR_ANY);
+            maddr.sin_port = addr_.sin_port;
+
+            if(bind(socket_, (struct sockaddr *)&maddr, sizeof(struct sockaddr_in)) < 0) {
+                log_->critical("bind errno:{}", errno);
+                return RetCode_KO;
+            }
+
+            struct ip_mreq mreq;
+            memset(&mreq, 0, sizeof(mreq));
+            mreq.imr_multiaddr.s_addr = addr_.sin_addr.s_addr;
+            mreq.imr_interface.s_addr = INADDR_ANY;
+
+            if(setsockopt(socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mreq, sizeof(mreq)) < 0) {
+                log_->critical("setsockopt IP_ADD_MEMBERSHIP:{}", errno);
+                return RetCode_KO;
+            }
+        }
+
+    } else {
+        log_->critical("socket:{}", errno);
+        return RetCode_KO;
+    }
+
+    set_connection_established();
+    return rcode;
+}
+
 RetCode connection::establish_connection(sockaddr_in &params)
 {
+    if(con_type_ == ConnectionType_UDP_MCAST_INGOING ||
+            con_type_ == ConnectionType_UDP_MCAST_OUTGOING) {
+        return RetCode_KO;
+    }
+
+    log_->debug("establish_connection -> host:{} - port:{}",
+                inet_ntoa(params.sin_addr),
+                htons(params.sin_port));
+
+    addr_ = params;
     RetCode rcode = RetCode_OK;
     int connect_res = 0;
     if((socket_ = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
         socklen_t len = sizeof(sockaddr_in);
-        if((connect_res = connect(socket_, (struct sockaddr *)&params, len)) != INVALID_SOCKET) {
+        if((connect_res = connect(socket_, (struct sockaddr *)&addr_, len)) != INVALID_SOCKET) {
+            log_->debug("connect OK -> host:{} - port:{}",
+                        inet_ntoa(addr_.sin_addr),
+                        htons(addr_.sin_port));
         } else {
-            //int last_socket_err_ = errno;
+            log_->error("connect KO -> host:{} - port:{} - errno:{}",
+                        inet_ntoa(addr_.sin_addr),
+                        htons(addr_.sin_port),
+                        errno);
         }
     } else {
-        //int last_socket_err_ = errno;
+        log_->critical("errno:{}", errno);
     }
+
     if(!connect_res) {
         rcode = set_connection_established();
     } else {
@@ -131,7 +224,21 @@ RetCode connection::establish_connection(sockaddr_in &params)
 
 RetCode connection::set_connection_established()
 {
+    if(set_socket_blocking_mode(false)) {
+        log_->critical("set socket not blocking");
+        return RetCode_KO;
+    }
+
+    if(con_type_ != ConnectionType_UDP_MCAST_INGOING &&
+            con_type_ != ConnectionType_UDP_MCAST_OUTGOING) {
+        log_->debug("connection established: socket:{}, host:{}, port:{}",
+                    socket_,
+                    inet_ntoa(addr_.sin_addr),
+                    ntohs(addr_.sin_port));
+    }
+
     status_ = ConnectionStatus_ESTABLISHED;
+    on_established();
     return RetCode_OK;
 }
 
@@ -139,6 +246,9 @@ RetCode connection::close_connection()
 {
     socket_shutdown();
     reset_rdn_outg_rep();
+    log_->debug("connection disconnected: host:{}, port:{}",
+                inet_ntoa(addr_.sin_addr),
+                ntohs(addr_.sin_port));
     status_ = ConnectionStatus_DISCONNECTED;
     return RetCode_OK;
 }
@@ -160,6 +270,21 @@ void connection::reset_rdn_outg_rep()
     }
     cpkt_.release();
     acc_snd_buff_.reset();
+}
+
+RetCode connection::send_datagram()
+{
+    int nbytes = sendto(socket_,
+                        &acc_snd_buff_.buf_[acc_snd_buff_.pos_],
+                        acc_snd_buff_.available_read(),
+                        0,
+                        (struct sockaddr *) &addr_,
+                        sizeof(addr_));
+    if(nbytes < 0) {
+        log_->error("send_datagram - errno:{}", errno);
+        return RetCode_KO;
+    }
+    return RetCode_OK;
 }
 
 RetCode connection::send_acc_buff()
@@ -302,84 +427,9 @@ RetCode connection::recv_pkt()
     return rcode;
 }
 
-//acceptor
-
-acceptor::acceptor(peer &p) :
-    peer_(p),
-    serv_socket_(INVALID_SOCKET)
+void connection::on_established()
 {
-    memset(&serv_sockaddr_in_, 0, sizeof(serv_sockaddr_in_));
-}
-
-acceptor::~acceptor()
-{
-    if(serv_socket_ != INVALID_SOCKET) {
-        close(serv_socket_);
-    }
-}
-
-RetCode acceptor::set_sockaddr_in(sockaddr_in &serv_sockaddr_in)
-{
-    serv_sockaddr_in_ = serv_sockaddr_in;
-    return RetCode_OK;
-}
-
-RetCode acceptor::create_server_socket(SOCKET &serv_socket)
-{
-    if(!log_) {
-        log_ = peer_.log_;
-    }
-
-    log_->info("interface:{}, port:{}",
-               inet_ntoa(serv_sockaddr_in_.sin_addr),
-               ntohs(serv_sockaddr_in_.sin_port));
-
-    if((serv_socket = serv_socket_ = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
-        log_->debug("socket:{} OK", serv_socket);
-        if(!bind(serv_socket_, (sockaddr *)&serv_sockaddr_in_, sizeof(sockaddr_in))) {
-            log_->debug("bind OK");
-            if(!listen(serv_socket_, SOMAXCONN)) {
-                log_->debug("listen OK");
-            } else {
-                log_->error("listen KO");
-                return RetCode_SYSERR;
-            }
-        } else {
-            int err = 0;
-            err = errno;
-            log_->error("bind KO err:{}", err);
-            return RetCode_SYSERR;
-        }
-    } else {
-        log_->error("socket KO");
-        return RetCode_SYSERR;
-    }
-    return RetCode_OK;
-}
-
-RetCode acceptor::accept(std::shared_ptr<connection> &new_connection)
-{
-    SOCKET socket = INVALID_SOCKET;
-    struct sockaddr_in addr;
-    socklen_t len = 0;
-
-    memset(&addr, 0, sizeof(addr));
-    if((socket = ::accept(serv_socket_, (sockaddr *)&addr, &len)) == INVALID_SOCKET) {
-        int err = 0;
-        err = errno;
-        log_->error("accept KO err:{}", err);
-        return RetCode_SYSERR;
-    } else {
-        log_->debug("socket:{}, host:{}, port:{} accept OK",
-                    socket,
-                    inet_ntoa(addr.sin_addr),
-                    ntohs(addr.sin_port));
-    }
-
-    new_connection->con_type_ = ConnectionType_INGOING;
-    new_connection->socket_ = socket;
-    new_connection->addr_ = addr;
-    return RetCode_OK;
+    //@todo
 }
 
 }

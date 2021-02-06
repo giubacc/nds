@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/nds",
-            "args": ["-v", "trace"],
+            "args": ["-v", "trace", "-n"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

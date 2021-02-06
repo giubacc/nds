@@ -116,17 +116,16 @@ struct selector : public th {
     void FDSET_write_incoming_pending_sockets();
     void FDSET_write_outgoing_pending_sockets();
 
-    RetCode server_socket_shutdown();
-
     RetCode consume_events();
     RetCode consume_inco_sock_events();
+
+    RetCode conn_process_rdn_buff(std::shared_ptr<connection> &);
 
     RetCode add_outg_conn(sel_evt *);
     RetCode manage_disconnect_conn(sel_evt *);
 
+    RetCode server_socket_shutdown();
     RetCode stop_and_clean();
-    RetCode inco_conn_process_rdn_buff(std::shared_ptr<connection> &);
-    RetCode outg_conn_process_rdn_buff(std::shared_ptr<connection> &);
 
     //rep
     peer &peer_;
@@ -143,7 +142,7 @@ struct selector : public th {
     mutable std::mutex mtx_;
     mutable std::condition_variable cv_;
 
-    //incoming
+    //TCP incoming
     SOCKET srv_socket_;
     sockaddr_in srv_sockaddr_in_;
     acceptor srv_acceptor_;
@@ -151,9 +150,13 @@ struct selector : public th {
     std::unordered_map<SOCKET, std::shared_ptr<connection>> inco_conn_map_;
     std::unordered_map<SOCKET, std::shared_ptr<connection>> wp_inco_conn_map_;
 
-    //outgoing
+    //TCP outgoing
     std::unordered_map<SOCKET, std::shared_ptr<connection>> outg_conn_map_;
     std::unordered_map<SOCKET, std::shared_ptr<connection>> wp_outg_conn_map_;
+
+    //UDP Multicast
+    connection mcast_udp_inco_conn_;
+    connection mcast_udp_outg_conn_;
 
     std::shared_ptr<spdlog::logger> log_;
 };

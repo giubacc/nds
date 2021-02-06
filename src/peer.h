@@ -30,8 +30,8 @@ struct peer {
     //peer configuration
     struct cfg {
         bool start_node = false;
-        std::string node_name = "GendoIkari";
         std::string multicast_address = "232.232.200.82";
+        uint16_t multicast_port = 8745;
         uint16_t listening_port = 31582;
         std::string val;
         bool get = false;

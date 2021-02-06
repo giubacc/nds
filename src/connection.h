@@ -31,22 +31,20 @@ enum PktChasingStatus {
     PktChasingStatus_Body
 };
 
-/*****************************************
-CONNECTION TYPE
-******************************************/
-typedef enum  {
+// ConnectionType
+enum ConnectionType {
     ConnectionType_UNDEFINED,
-    ConnectionType_INGOING,
-    ConnectionType_OUTGOING,
-} ConnectionType;
+    ConnectionType_INGOING,             //TCP ingoing
+    ConnectionType_OUTGOING,            //TCP outgoing
+    ConnectionType_UDP_MCAST_INGOING,  //UDP ingoing multicast
+    ConnectionType_UDP_MCAST_OUTGOING,  //UDP outgoing multicast
+};
 
-/*****************************************
-CONNECTION STATUS
-******************************************/
-typedef enum  {
+// ConnectionStatus
+enum ConnectionStatus {
     ConnectionStatus_DISCONNECTED,
     ConnectionStatus_ESTABLISHED,
-} ConnectionStatus;
+};
 
 struct connection {
 
@@ -55,22 +53,35 @@ struct connection {
     const char *get_host_ip() const;
     unsigned short get_host_port() const;
 
+    void set_host_ip(const char *ip);
+    void set_host_port(unsigned short port);
+
     RetCode set_socket_blocking_mode(bool blocking);
     RetCode sckt_hndl_err(long sock_op_res);
+
+    RetCode establish_multicast(sockaddr_in &params);
     RetCode establish_connection(sockaddr_in &params);
+
     RetCode set_connection_established();
     RetCode close_connection();
     RetCode socket_shutdown();
 
-    RetCode recv_pkt();
+    void reset_rdn_outg_rep();
 
+    //receiving, used by both TCP/UDP connections
+    RetCode recv_pkt();
     RetCode recv_bytes();
     RetCode chase_pkt();
     RetCode read_decode_hdr();
 
-    void reset_rdn_outg_rep();
+    //accumulating-and-fire sending, only used by TCP connections
     RetCode send_acc_buff();
     RetCode aggr_msgs_and_send_pkt();
+
+    //single datagram sending, only used by UDP connections
+    RetCode send_datagram();
+
+    void on_established();
 
     ConnectionType con_type_;
     ConnectionStatus status_;

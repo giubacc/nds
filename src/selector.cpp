@@ -26,6 +26,83 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace nds {
 
+//acceptor
+
+acceptor::acceptor(peer &p) :
+    peer_(p),
+    serv_socket_(INVALID_SOCKET)
+{
+    memset(&serv_sockaddr_in_, 0, sizeof(serv_sockaddr_in_));
+}
+
+acceptor::~acceptor()
+{
+    if(serv_socket_ != INVALID_SOCKET) {
+        close(serv_socket_);
+    }
+}
+
+RetCode acceptor::set_sockaddr_in(sockaddr_in &serv_sockaddr_in)
+{
+    serv_sockaddr_in_ = serv_sockaddr_in;
+    return RetCode_OK;
+}
+
+RetCode acceptor::create_server_socket(SOCKET &serv_socket)
+{
+    if(!log_) {
+        log_ = peer_.log_;
+    }
+
+    log_->info("interface:{}, port:{}",
+               inet_ntoa(serv_sockaddr_in_.sin_addr),
+               ntohs(serv_sockaddr_in_.sin_port));
+
+    if((serv_socket = serv_socket_ = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
+        log_->debug("socket:{} OK", serv_socket);
+        if(!bind(serv_socket_, (sockaddr *)&serv_sockaddr_in_, sizeof(sockaddr_in))) {
+            log_->debug("bind OK");
+            if(!listen(serv_socket_, SOMAXCONN)) {
+                log_->debug("listen OK");
+            } else {
+                log_->error("listen KO");
+                return RetCode_SYSERR;
+            }
+        } else {
+            int err = errno;
+            log_->error("bind KO err:{}", err);
+            return RetCode_SYSERR;
+        }
+    } else {
+        log_->error("socket KO");
+        return RetCode_SYSERR;
+    }
+    return RetCode_OK;
+}
+
+RetCode acceptor::accept(std::shared_ptr<connection> &new_conn)
+{
+    SOCKET socket = INVALID_SOCKET;
+    struct sockaddr_in addr;
+    socklen_t len = 0;
+
+    if((socket = ::accept(serv_socket_, (sockaddr *)&addr, &len)) == INVALID_SOCKET) {
+        int err = errno;
+        log_->error("accept KO err:{}", err);
+        return RetCode_SYSERR;
+    } else {
+        getpeername(socket, (sockaddr *)&addr, &len);
+        log_->debug("accept OK - socket:{}, host:{}, port:{}",
+                    socket,
+                    inet_ntoa(addr.sin_addr),
+                    ntohs(addr.sin_port));
+        new_conn->socket_ = socket;
+        new_conn->addr_ = addr;
+        new_conn->set_connection_established();
+    }
+    return RetCode_OK;
+}
+
 //SEL_EVT
 
 sel_evt::sel_evt(NDS_SELECTOR_Evt evt) : evt_(evt) {}
@@ -43,7 +120,9 @@ selector::selector(peer &p) :
     udp_ntfy_srv_socket_(INVALID_SOCKET),
     udp_ntfy_cli_socket_(INVALID_SOCKET),
     srv_socket_(INVALID_SOCKET),
-    srv_acceptor_(p)
+    srv_acceptor_(p),
+    mcast_udp_inco_conn_(*this, ConnectionType_UDP_MCAST_INGOING),
+    mcast_udp_outg_conn_(*this, ConnectionType_UDP_MCAST_OUTGOING)
 {
     memset(&udp_ntfy_sa_in_, 0, sizeof(udp_ntfy_sa_in_));
     udp_ntfy_sa_in_.sin_family = AF_INET;
@@ -66,6 +145,18 @@ RetCode selector::init()
     RET_ON_KO(srv_acceptor_.set_sockaddr_in(srv_sockaddr_in_))
     RET_ON_KO(create_UDP_notify_srv_sock())
     RET_ON_KO(connect_UDP_notify_cli_sock())
+
+    struct sockaddr_in mcast_p;
+    mcast_p.sin_family = AF_INET;
+    mcast_p.sin_addr.s_addr = inet_addr(peer_.cfg_.multicast_address.c_str());
+    mcast_p.sin_port = htons(peer_.cfg_.multicast_port);
+
+    mcast_udp_inco_conn_.log_ = log_;
+    mcast_udp_outg_conn_.log_ = log_;
+
+    RET_ON_KO(mcast_udp_inco_conn_.establish_multicast(mcast_p))
+    RET_ON_KO(mcast_udp_outg_conn_.establish_multicast(mcast_p))
+
     set_status(SelectorStatus_INIT);
     return RetCode_OK;
 }
@@ -163,15 +254,14 @@ RetCode selector::notify(const sel_evt *evt)
 {
     long bsent = 0;
     while((bsent = send(udp_ntfy_cli_socket_, (const char *)&evt, sizeof(void *), 0)) == SOCKET_ERROR) {
-        int err = 0;
-        err = errno;
+        int err = errno;
         if(err == EAGAIN || err == EWOULDBLOCK) {
             //ok we can go ahead
         } else if(err == ECONNRESET) {
-            log_->error("udp_ntfy_cli_socket_:{} err:{}",  udp_ntfy_cli_socket_, err);
+            log_->error("udp_ntfy_cli_socket_:{} errno:{}",  udp_ntfy_cli_socket_, err);
             return RetCode_KO;
         } else {
-            log_->error("udp_ntfy_cli_socket_:{} errno:{}",  udp_ntfy_cli_socket_, errno);
+            log_->error("udp_ntfy_cli_socket_:{} errno:{}",  udp_ntfy_cli_socket_, err);
             return RetCode_SYSERR;
         }
     }
@@ -200,7 +290,7 @@ RetCode selector::process_inco_sock_inco_events()
             sckt = it->second->socket_;
             //first: check if it is readable.
             if(FD_ISSET(sckt, &read_FDs_)) {
-                inco_conn_process_rdn_buff(it->second);
+                conn_process_rdn_buff(it->second);
                 if(!(--sel_res_)) {
                     break;
                 }
@@ -242,7 +332,7 @@ RetCode selector::process_outg_sock_inco_events()
         for(auto it = outg_conn_map_.begin(); it != outg_conn_map_.end(); it++) {
             //first: check if it is readable.
             if(FD_ISSET(it->second->socket_, &read_FDs_)) {
-                outg_conn_process_rdn_buff(it->second);
+                conn_process_rdn_buff(it->second);
                 if(!(--sel_res_)) {
                     break;
                 }
@@ -254,23 +344,13 @@ RetCode selector::process_outg_sock_inco_events()
 
 RetCode selector::consume_inco_sock_events()
 {
-    std::shared_ptr<connection> new_conn_shp;
     if(FD_ISSET(srv_socket_, &read_FDs_)) {
-        if(srv_acceptor_.accept(new_conn_shp)) {
+        std::shared_ptr<connection> new_conn(new connection(*this, ConnectionType_INGOING));
+        if(srv_acceptor_.accept(new_conn)) {
             log_->critical("accepting new connection");
             return RetCode_KO;
         }
-
-        if(new_conn_shp->set_socket_blocking_mode(false)) {
-            log_->critical("set socket not blocking");
-            return RetCode_KO;
-        }
-
-        inco_conn_map_[new_conn_shp->socket_] = new_conn_shp;
-        log_->debug("socket:{}, host:{}, port:{} socket accepted",
-                    new_conn_shp->socket_,
-                    new_conn_shp->get_host_ip(),
-                    new_conn_shp->get_host_port());
+        inco_conn_map_[new_conn->socket_] = new_conn;
 
         --sel_res_;
         if(sel_res_) {
@@ -432,16 +512,14 @@ RetCode selector::process_asyn_evts()
         delete conn_evt;
     }
     if(brecv == SOCKET_ERROR) {
-        int err = 0;
-        err = errno;
-        if(errno == EAGAIN || errno == EWOULDBLOCK) {
+        int err = errno;
+        if(err == EAGAIN || err == EWOULDBLOCK) {
             //ok we can go ahead
-        } else if(errno == ECONNRESET) {
-            log_->error("err:{}", err);
+        } else if(err == ECONNRESET) {
+            log_->error("errno:{}", err);
             return RetCode_KO;
         } else {
-            perror(__func__);
-            log_->critical("errno:{}", errno);
+            log_->critical("errno:{}", err);
             return RetCode_SYSERR;
         }
     }
@@ -505,20 +583,11 @@ RetCode selector::stop_and_clean()
     return RetCode_OK;
 }
 
-RetCode selector::inco_conn_process_rdn_buff(std::shared_ptr<connection> &ic)
+RetCode selector::conn_process_rdn_buff(std::shared_ptr<connection> &conn)
 {
-    RetCode rcode = ic->recv_bytes();
-    while(!(rcode = ic->chase_pkt())) {
-        ic->recv_pkt();
-    }
-    return rcode;
-}
-
-RetCode selector::outg_conn_process_rdn_buff(std::shared_ptr<connection> &oc)
-{
-    RetCode rcode = oc->recv_bytes();
-    while(!(rcode = oc->chase_pkt())) {
-        oc->recv_pkt();
+    RetCode rcode = conn->recv_bytes();
+    while(!(rcode = conn->chase_pkt())) {
+        conn->recv_pkt();
     }
     return rcode;
 }
