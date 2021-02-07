@@ -141,7 +141,6 @@ struct selector : public th {
 
     int nfds_;
     int sel_res_;
-    timeval sel_timeout_;
     sockaddr_in udp_ntfy_sa_in_;
     SOCKET udp_ntfy_srv_socket_;
     SOCKET udp_ntfy_cli_socket_;

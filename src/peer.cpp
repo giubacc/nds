@@ -32,6 +32,8 @@ const std::string pkt_ip                = "_ip";
 const std::string pkt_port              = "_po";
 const std::string pkt_ts                = "_ts";
 const std::string pkt_data              = "_dt";
+const std::string pkt_empty_data        = "_ed";
+const std::string pkt_interrupt         = "_ir";
 
 // peer
 
@@ -76,6 +78,10 @@ RetCode peer::init()
 
     //selector init
     RET_ON_KO(selector_.init())
+
+    //4 seconds before this node will auto generate the timestamp
+    tp_auto_gen_ts_ = std::chrono::system_clock::now() + std::chrono::duration<int>(4);
+
     return rcode;
 }
 
@@ -136,11 +142,69 @@ RetCode peer::process_incoming_events()
     while(true) {
         event evt = incoming_evt_q_.get();
         Json::Value json_evt = evt_to_json(evt);
-        if(foreign_evt(json_evt)) {
 
+        if(evt.evt_ == Interrupt) {
+            process_node_status();
+        } else if(foreign_evt(json_evt)) {
+            //packet from multicast or tcp connection
+            log_->trace("evt:\n{}", json_evt.toStyledString());
+            process_foreign_evt(json_evt);
         } else {
             log_->debug("evt is from this node, discarding ...");
         }
+    }
+
+    return rcode;
+}
+
+RetCode peer::process_foreign_evt(Json::Value &json_evt)
+{
+    RetCode rcode = RetCode_OK;
+    std::string ptype = json_evt[pkt_type].asString();
+
+    if(ptype == pkt_type_alive_node) {
+        time_t oth_ts = json_evt[pkt_ts].asUInt();
+
+        if(!ts_ && !oth_ts) {
+            log_->debug("discarding alive evt from other newly spawned node: this node is still synching");
+            return RetCode_OK;
+        }
+
+        if(ts_ > oth_ts) {
+            log_->debug("other node is not updated: [this_ts > other_ts], notifying it ...");
+            send_alive_node_msg();
+            return RetCode_OK;
+        } else if(ts_ < oth_ts) {
+            log_->debug("this node is not updated: [this_ts < other_ts], requesting updated data ...");
+
+            //@todo
+
+            ts_ = oth_ts;
+        } else {
+            //equals, do nothing
+        }
+
+    } else if(ptype == pkt_type_alive_node) {
+
+    } else if(ptype == pkt_type_fail_node) {
+
+    } else {
+        log_->error("unk pkt_type: {}", ptype);
+    }
+
+    return rcode;
+}
+
+RetCode peer::process_node_status()
+{
+    RetCode rcode = RetCode_OK;
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+
+    //if no other node has still responded to initial alive, the node generates itself the timestamp
+    if(!ts_ && now > tp_auto_gen_ts_) {
+        ts_ = gen_ts();
+        log_->debug("auto generated timestamp: {}", ts_);
+        send_alive_node_msg();
     }
 
     return rcode;
@@ -178,18 +242,8 @@ int peer::run()
         return rcode;
     }
 
-    if(cfg_.start_node) {
-        process_incoming_events();
-    } else {
-        if(!cfg_.val.empty()) {
-            set();
-        }
-        if(!cfg_.get) {
-            get();
-        }
-        stop();
-    }
-
+    process_incoming_events();
+    stop();
     return rcode;
 }
 
@@ -229,12 +283,15 @@ void peer::set_ts(uint32_t ts)
 
 Json::Value peer::evt_to_json(const event &evt)
 {
-    std::string pkts(evt.opt_rdn_pkt_->buf_, evt.opt_rdn_pkt_->available_read());
-    std::istringstream istr(pkts);
     Json::Value jpkt;
-    istr >> jpkt;
-    jpkt[pkt_ip] = evt.opt_src_ip_;
-    log_->debug("evt:\n{}", jpkt.toStyledString());
+    if(evt.evt_ == Interrupt) {
+        jpkt[pkt_interrupt] = "";
+    } else if(evt.opt_rdn_pkt_) {
+        std::string pkts(evt.opt_rdn_pkt_->buf_, evt.opt_rdn_pkt_->available_read());
+        std::istringstream istr(pkts);
+        istr >> jpkt;
+        jpkt[pkt_ip] = evt.opt_src_ip_;
+    }
     return jpkt;
 }
 

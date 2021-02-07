@@ -111,7 +111,7 @@ RetCode acceptor::accept(std::shared_ptr<connection> &new_conn)
 
 //event
 
-event::event() : evt_(Undef) {}
+event::event() : evt_(Interrupt) {}
 
 event::event(EvtType evt) : evt_(evt) {}
 
@@ -150,8 +150,6 @@ selector::selector(peer &p) :
     srv_sockaddr_in_.sin_addr.s_addr = INADDR_ANY;
     FD_ZERO(&read_FDs_);
     FD_ZERO(&write_FDs_);
-    sel_timeout_.tv_sec = 0;
-    sel_timeout_.tv_usec = 0;
 }
 
 selector::~selector()
@@ -290,7 +288,7 @@ RetCode selector::connect_UDP_notify_cli_sock()
 
 RetCode selector::interrupt()
 {
-    event *interrupt = new event(Interrupt);
+    event *interrupt = new event();
     return notify(interrupt);
 }
 
@@ -490,15 +488,15 @@ inline void selector::FDSET_incoming_sockets()
 
 inline void selector::FDSET_outgoing_sockets()
 {
-    auto it_2 = outg_conn_map_.begin();
-    while(it_2 != outg_conn_map_.end()) {
-        if(it_2->second->status_ == ConnectionStatus_ESTABLISHED) {
-            FD_SET(it_2->second->socket_, &read_FDs_);
-            nfds_ = ((int)it_2->second->socket_ > nfds_) ? (int)it_2->second->socket_ : nfds_;
-            it_2++;
+    auto it = outg_conn_map_.begin();
+    while(it != outg_conn_map_.end()) {
+        if(it->second->status_ == ConnectionStatus_ESTABLISHED) {
+            FD_SET(it->second->socket_, &read_FDs_);
+            nfds_ = ((int)it->second->socket_ > nfds_) ? (int)it->second->socket_ : nfds_;
+            it++;
         } else {
-            wp_outg_conn_map_.erase(it_2->second->socket_);
-            it_2 = outg_conn_map_.erase(it_2);
+            wp_outg_conn_map_.erase(it->second->socket_);
+            it = outg_conn_map_.erase(it);
         }
     }
 }
@@ -683,22 +681,41 @@ void selector::run()
         }
 
         set_status(SelectorStatus_SELECT);
-        timeval sel_timeout = sel_timeout_;
+
+        timeval sel_timeout;
+        sel_timeout.tv_sec = 5;
+        sel_timeout.tv_usec = 0;
+        time_t t0 = time(0), elapsed = 0;
+
         while(status_ == SelectorStatus_SELECT) {
-            if((sel_res_ = select(nfds_+1, &read_FDs_, &write_FDs_, 0, 0)) > 0) {
-                log_->debug("+select() [interrupt]+");
+
+            if((sel_res_ = select(nfds_+1, &read_FDs_, &write_FDs_, 0, &sel_timeout)) > 0) {
+                log_->trace("+select() [interrupt]+");
                 consume_events();
             } else if(!sel_res_) {
                 //timeout
-                log_->debug("+select() [timeout]+");
+#if 0
+                log_->trace("+select() [timeout]+");
+#endif
+                peer_.incoming_evt_q_.put(event());
             } else {
                 //error
-                log_->error("+select() [error:{}]+",  sel_res_);
+                log_->error("+select() [errno:{}]+", errno);
                 set_status(SelectorStatus_ERROR);
+                break;
             }
+
             FDSET_sockets();
-            sel_timeout = sel_timeout_;
+
+            if((elapsed = (time(0) - t0)) < 5) {
+                sel_timeout.tv_sec = 5 - elapsed;
+            } else {
+                t0 = time(0);
+                sel_timeout.tv_sec = 5;
+            }
+            sel_timeout.tv_usec = 0;
         }
+
         if(status_ == SelectorStatus_REQUEST_STOP) {
             log_->debug("+stop requested, clean initiated+");
             stop_and_clean();

@@ -23,15 +23,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace nds {
 
-extern const std::string pkt_type;
-extern const std::string pkt_type_alive_node;
-extern const std::string pkt_type_fail_node;
-extern const std::string pkt_type_data;
-extern const std::string pkt_ip;
-extern const std::string pkt_port;
-extern const std::string pkt_ts;
-extern const std::string pkt_data;
-
 /** @brief a peer
 */
 struct peer {
@@ -60,11 +51,13 @@ struct peer {
     RetCode start();
     RetCode stop();
     RetCode process_incoming_events();
+    RetCode process_node_status();
 
     RetCode set();
     RetCode get();
 
     bool foreign_evt(const Json::Value &json_evt);
+    RetCode process_foreign_evt(Json::Value &json_evt);
 
     RetCode send_alive_node_msg();
     Json::Value build_alive_node_msg() const;
@@ -83,7 +76,12 @@ struct peer {
     std::condition_variable cv_;
     b_qu<event> incoming_evt_q_;
 
-    //protocol dependant rep
+    //the time point at which this node will generate itself the timestamp;
+    //this will happen if no other node will respond to initial alive sent by
+    //this node.
+    std::chrono::system_clock::time_point tp_auto_gen_ts_;
+
+    //the timestamp shared in the cluser
     uint32_t ts_ = 0;
 
     std::shared_ptr<spdlog::logger> log_;
