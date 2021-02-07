@@ -64,6 +64,8 @@ struct peer {
     RetCode set();
     RetCode get();
 
+    bool foreign_evt(const Json::Value &json_evt);
+
     RetCode send_alive_node_msg();
     Json::Value build_alive_node_msg() const;
 

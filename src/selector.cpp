@@ -21,6 +21,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifdef __GNUG__
 #include <errno.h>
 #include <unistd.h>
+#include <ifaddrs.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <linux/if_link.h>
 #endif
 #include "peer.h"
 
@@ -55,8 +61,8 @@ RetCode acceptor::create_server_socket(SOCKET &serv_socket)
     }
 
     log_->debug("interface:{}, listening port:{}",
-               inet_ntoa(serv_sockaddr_in_.sin_addr),
-               ntohs(serv_sockaddr_in_.sin_port));
+                inet_ntoa(serv_sockaddr_in_.sin_addr),
+                ntohs(serv_sockaddr_in_.sin_port));
 
     if((serv_socket = serv_socket_ = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
         log_->debug("socket:{} OK", serv_socket);
@@ -154,6 +160,9 @@ selector::~selector()
 RetCode selector::init()
 {
     log_ = peer_.log_;
+
+    enumHostNetInterfaces();
+
     RET_ON_KO(srv_acceptor_.set_sockaddr_in(srv_sockaddr_in_))
     RET_ON_KO(create_UDP_notify_srv_sock())
     RET_ON_KO(connect_UDP_notify_cli_sock())
@@ -170,6 +179,29 @@ RetCode selector::init()
     RET_ON_KO(mcast_udp_outg_conn_.establish_multicast(mcast_p))
 
     set_status(SelectorStatus_INIT);
+    return RetCode_OK;
+}
+
+RetCode selector::enumHostNetInterfaces()
+{
+    struct ifaddrs *addrs, *tmp;
+    getifaddrs(&addrs);
+    tmp = addrs;
+    char intf_ip[16];
+
+    while(tmp) {
+        if(tmp->ifa_addr && tmp->ifa_addr->sa_family == AF_INET) {
+            getnameinfo(tmp->ifa_addr,
+                        sizeof(struct sockaddr_in),
+                        intf_ip, NI_MAXHOST,
+                        NULL, 0, NI_NUMERICHOST);
+            log_->debug("registering host-intf:{}-{}", tmp->ifa_name, intf_ip);
+            hintfs_.insert(tmp->ifa_name);
+        }
+        tmp = tmp->ifa_next;
+    }
+
+    freeifaddrs(addrs);
     return RetCode_OK;
 }
 

@@ -136,9 +136,11 @@ RetCode peer::process_incoming_events()
     while(true) {
         event evt = incoming_evt_q_.get();
         Json::Value json_evt = evt_to_json(evt);
+        if(foreign_evt(json_evt)) {
 
-
-
+        } else {
+            log_->debug("evt is from this node, discarding ...");
+        }
     }
 
     return rcode;
@@ -189,6 +191,12 @@ int peer::run()
     }
 
     return rcode;
+}
+
+bool peer::foreign_evt(const Json::Value &json_evt)
+{
+    return (json_evt[pkt_port].asUInt() != cfg_.listening_port) &&
+           (selector_.hintfs_.find(json_evt[pkt_ip].asString()) == selector_.hintfs_.end());
 }
 
 RetCode peer::send_alive_node_msg()

@@ -92,6 +92,8 @@ struct selector : public th {
 
     RetCode init();
 
+    RetCode enumHostNetInterfaces();
+
     RetCode await_for_status_reached(SelectorStatus test,
                                      SelectorStatus &current,
                                      time_t sec = -1,
@@ -143,6 +145,9 @@ struct selector : public th {
     sockaddr_in udp_ntfy_sa_in_;
     SOCKET udp_ntfy_srv_socket_;
     SOCKET udp_ntfy_cli_socket_;
+
+    //host network interfaces
+    std::unordered_set<std::string> hintfs_;
 
     mutable std::mutex mtx_;
     mutable std::condition_variable cv_;

@@ -36,6 +36,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <chrono>
 #include <ctime>
 #include <sstream>
