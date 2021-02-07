@@ -39,9 +39,11 @@ connection::connection(selector &sel, ConnectionType ct) :
     pkt_ch_st_(PktChasingStatus_BodyLen),
     bdy_bytelen_(0),
     rdn_buff_(RCV_SND_BUF_SZ),
-    acc_snd_buff_(RCV_SND_BUF_SZ)
+    acc_snd_buff_(RCV_SND_BUF_SZ),
+    log_(sel.log_)
 {
     memset(&addr_, 0, sizeof(addr_));
+    addr_.sin_family = AF_INET;
 }
 
 std::shared_ptr<connection> &connection::self_as_shared_ptr()
@@ -199,6 +201,11 @@ RetCode connection::establish_multicast(sockaddr_in &params)
 
     set_connection_established();
     return rcode;
+}
+
+RetCode connection::establish_connection()
+{
+    return establish_connection(addr_);
 }
 
 RetCode connection::establish_connection(sockaddr_in &params)

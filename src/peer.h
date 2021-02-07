@@ -53,9 +53,6 @@ struct peer {
     RetCode process_incoming_events();
     RetCode process_node_status();
 
-    RetCode set();
-    RetCode get();
-
     bool foreign_evt(const Json::Value &json_evt);
     RetCode process_foreign_evt(Json::Value &json_evt);
 
@@ -81,8 +78,10 @@ struct peer {
     //this node.
     std::chrono::system_clock::time_point tp_auto_gen_ts_;
 
-    //the timestamp shared in the cluser
+    //the timestamp shared across the cluser
     uint32_t ts_ = 0;
+    //the value shared across the cluser
+    std::string val_;
 
     std::shared_ptr<spdlog::logger> log_;
 };

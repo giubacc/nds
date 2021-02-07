@@ -512,10 +512,6 @@ inline RetCode selector::add_outg_conn(event *conn_evt)
     if((rcode = conn_evt->conn_->establish_connection(conn_evt->conn_->addr_))) {
         return rcode;
     }
-    if(conn_evt->conn_->set_socket_blocking_mode(false)) {
-        log_->critical("setting socket not blocking");
-        return RetCode_KO;
-    }
     outg_conn_map_[conn_evt->conn_->socket_] = conn_evt->conn_;
     return RetCode_OK;
 }

@@ -62,6 +62,8 @@ struct connection {
     RetCode sckt_hndl_err(long sock_op_res);
 
     RetCode establish_multicast(sockaddr_in &params);
+
+    RetCode establish_connection();
     RetCode establish_connection(sockaddr_in &params);
 
     RetCode set_connection_established();

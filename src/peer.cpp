@@ -32,7 +32,7 @@ const std::string pkt_ip                = "_ip";
 const std::string pkt_port              = "_po";
 const std::string pkt_ts                = "_ts";
 const std::string pkt_data              = "_dt";
-const std::string pkt_empty_data        = "_ed";
+const std::string pkt_node_has_data     = "_hd";
 const std::string pkt_interrupt         = "_ir";
 
 // peer
@@ -177,9 +177,12 @@ RetCode peer::process_foreign_evt(Json::Value &json_evt)
         } else if(ts_ < oth_ts) {
             log_->debug("this node is not updated: [this_ts < other_ts], requesting updated data ...");
 
-            //@todo
+            ts_ = oth_ts; //@fixme
 
-            ts_ = oth_ts;
+            std::shared_ptr<connection> outg_conn(new connection(selector_, ConnectionType_TCP_OUTGOING));
+            outg_conn->set_host_ip(json_evt[pkt_ip].asCString());
+            outg_conn->set_host_port(json_evt[pkt_port].asUInt());
+            selector_.notify(new event(ConnectRequest, outg_conn));
         } else {
             //equals, do nothing
         }
@@ -210,22 +213,6 @@ RetCode peer::process_node_status()
     return rcode;
 }
 
-RetCode peer::set()
-{
-    RetCode rcode = RetCode_OK;
-    log_->debug("attempting set value:{} ...", cfg_.val);
-
-    return rcode;
-}
-
-RetCode peer::get()
-{
-    RetCode rcode = RetCode_OK;
-    log_->debug("attempting get value from cluster ...");
-
-    return rcode;
-}
-
 int peer::run()
 {
     RetCode rcode = RetCode_OK;
@@ -236,6 +223,12 @@ int peer::run()
     }
     if((rcode = start())) {
         return rcode;
+    }
+
+    if(!cfg_.val.empty()){
+        log_->info("set value:{} ...", cfg_.val);
+        val_ = cfg_.val;
+        ts_ = gen_ts();
     }
 
     if((rcode = send_alive_node_msg())) {
@@ -301,6 +294,7 @@ Json::Value peer::build_alive_node_msg() const
     alive_node_msg[pkt_type] = pkt_type_alive_node;
     alive_node_msg[pkt_port] = cfg_.listening_port;
     alive_node_msg[pkt_ts] = get_ts();
+    alive_node_msg[pkt_node_has_data] = val_.empty() ? "n" : "y";
     return alive_node_msg;
 }
 
