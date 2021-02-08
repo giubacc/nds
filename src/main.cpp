@@ -47,8 +47,13 @@ int main(int argc, char *argv[])
                    .doc("specify logging verbosity [off, trace, info (default), warn, err")
                    & clipp::value("logging verbosity", pr.cfg_.log_level),
 
-                   clipp::opt_value("set").set(pr.cfg_.val).doc("set the value shared across the cluster"),
-                   clipp::option("get").set(pr.cfg_.get_val, true).doc("read the value shared across the cluster")
+                   clipp::option("set")
+                   .doc("set the value shared across the cluster")
+                   & clipp::value("value", pr.cfg_.val),
+
+                   clipp::option("get")
+                   .set(pr.cfg_.get_val, true)
+                   .doc("get the value shared across the cluster")
                );
 
     if(!clipp::parse(argc, argv, cli)) {

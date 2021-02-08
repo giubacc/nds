@@ -25,9 +25,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace nds {
 
 /*
-    protocol fields (starting with:_) and values
+    protocol fields (the ones starting with:_) and values
 */
-
 const std::string pkt_type              = "_pt";
 const std::string pkt_type_alive_node   = "an";
 const std::string pkt_type_data         = "dt";
@@ -35,7 +34,6 @@ const std::string pkt_source_ip         = "_si";
 const std::string pkt_listening_port    = "_lp";
 const std::string pkt_ts                = "_ts";
 const std::string pkt_data_value        = "_dv";
-const std::string pkt_node_has_data     = "_hd";
 const std::string pkt_interrupt         = "_ir";
 
 // peer
@@ -152,6 +150,7 @@ RetCode peer::process_incoming_events()
                 break;
             }
         } else if(evt.evt_ == IncomingConnect) {
+            log_->debug("sending data to node");
             send_data_msg(*evt.conn_);
         } else if((evt.evt_ == PacketAvailable) && foreign_evt(json_evt)) {
             //packet from multicast or tcp connection
@@ -189,12 +188,14 @@ RetCode peer::process_foreign_evt(event &evt, Json::Value &json_evt)
         } else if(current_node_ts_ < oth_ts) {
             if(desired_cluster_ts_ < oth_ts) {
                 desired_cluster_ts_ = oth_ts;
+                log_->debug("this node is not updated: [this_ts < other_ts], requesting updated data ...");
+                std::shared_ptr<connection> outg_conn(new connection(selector_, ConnectionType_TCP_OUTGOING));
+                outg_conn->set_host_ip(json_evt[pkt_source_ip].asCString());
+                outg_conn->set_host_port(json_evt[pkt_listening_port].asUInt());
+                selector_.notify(new event(ConnectRequest, outg_conn));
+            } else {
+                //already requested to someone else, do nothing
             }
-            log_->debug("this node is not updated: [this_ts < other_ts], requesting updated data ...");
-            std::shared_ptr<connection> outg_conn(new connection(selector_, ConnectionType_TCP_OUTGOING));
-            outg_conn->set_host_ip(json_evt[pkt_source_ip].asCString());
-            outg_conn->set_host_port(json_evt[pkt_listening_port].asUInt());
-            selector_.notify(new event(ConnectRequest, outg_conn));
         } else {
             //equals, do nothing
         }
@@ -266,7 +267,7 @@ int peer::run()
 
 bool peer::foreign_evt(const Json::Value &json_evt)
 {
-    return (json_evt[pkt_listening_port].asUInt() != cfg_.listening_port) &&
+    return (json_evt[pkt_listening_port].asUInt() != ntohs(selector_.srv_sockaddr_in_.sin_port)) &&
            (selector_.hintfs_.find(json_evt[pkt_source_ip].asString()) == selector_.hintfs_.end());
 }
 
@@ -297,7 +298,6 @@ Json::Value peer::build_alive_node_msg() const
     alive_node_msg[pkt_type] = pkt_type_alive_node;
     alive_node_msg[pkt_listening_port] = ntohs(selector_.srv_sockaddr_in_.sin_port);
     alive_node_msg[pkt_ts] = current_node_ts_;
-    alive_node_msg[pkt_node_has_data] = data_.empty() ? "n" : "y";
     return alive_node_msg;
 }
 
@@ -322,7 +322,9 @@ Json::Value peer::evt_to_json(const event &evt)
         std::string pkts(evt.opt_rdn_pkt_->buf_, evt.opt_rdn_pkt_->available_read());
         std::istringstream istr(pkts);
         istr >> jpkt;
-        jpkt[pkt_source_ip] = evt.opt_src_ip_;
+        if(jpkt[pkt_type].asString() == pkt_type_alive_node) {
+            jpkt[pkt_source_ip] = evt.opt_src_ip_;
+        }
     }
     return jpkt;
 }

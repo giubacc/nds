@@ -269,7 +269,6 @@ RetCode selector::create_UDP_notify_srv_sock()
 
 RetCode selector::connect_UDP_notify_cli_sock()
 {
-    int err = 0;
     socklen_t len = sizeof(udp_ntfy_sa_in_);
     getsockname(udp_ntfy_srv_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, &len);
     log_->debug("sin_addr:{}, sin_port:{}",
@@ -280,7 +279,7 @@ RetCode selector::connect_UDP_notify_cli_sock()
         if((connect(udp_ntfy_cli_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) != INVALID_SOCKET) {
             log_->debug("udp_ntfy_cli_socket_:{} connect OK", udp_ntfy_cli_socket_);
         } else {
-            log_->critical("udp_ntfy_cli_socket_:{} connect KO err:{}", udp_ntfy_cli_socket_, err);
+            log_->critical("udp_ntfy_cli_socket_:{} connect KO errno:{}", udp_ntfy_cli_socket_, errno);
             return RetCode_SYSERR;
         }
     } else {
@@ -400,12 +399,13 @@ RetCode selector::process_outg_sock_inco_events()
 RetCode selector::consume_inco_sock_events()
 {
     if(FD_ISSET(srv_socket_, &read_FDs_)) {
-        std::shared_ptr<connection> new_conn(new connection(*this, ConnectionType_TCP_INGOING));
-        if(srv_acceptor_.accept(new_conn)) {
+        std::shared_ptr<connection> inco_conn(new connection(*this, ConnectionType_TCP_INGOING));
+        if(srv_acceptor_.accept(inco_conn)) {
             log_->critical("accepting new connection");
             return RetCode_KO;
         }
-        inco_conn_map_[new_conn->socket_] = new_conn;
+        inco_conn_map_[inco_conn->socket_] = inco_conn;
+        inco_conn->on_established();
 
         --sel_res_;
         if(sel_res_) {
@@ -437,7 +437,9 @@ inline void selector::FDSET_write_incoming_pending_sockets()
 {
     auto it = wp_inco_conn_map_.begin();
     while(it != wp_inco_conn_map_.end()) {
-        if(it->second->acc_snd_buff_.available_read()) {
+        if(it->second->acc_snd_buff_.available_read() ||
+                (it->second->cpkt_ && it->second->cpkt_->available_read()) ||
+                !it->second->pkt_sending_q_.empty()) {
             FD_SET(it->second->socket_, &write_FDs_);
             nfds_ = ((int)it->second->socket_ > nfds_) ? (int)it->second->socket_ : nfds_;
             it++;
@@ -451,7 +453,9 @@ inline void selector::FDSET_write_outgoing_pending_sockets()
 {
     auto it = wp_outg_conn_map_.begin();
     while(it != wp_outg_conn_map_.end()) {
-        if(it->second->acc_snd_buff_.available_read()) {
+        if(it->second->acc_snd_buff_.available_read() ||
+                (it->second->cpkt_ && it->second->cpkt_->available_read()) ||
+                !it->second->pkt_sending_q_.empty()) {
             FD_SET(it->second->socket_, &write_FDs_);
             nfds_ = ((int)it->second->socket_ > nfds_) ? (int)it->second->socket_ : nfds_;
             it++;
@@ -507,6 +511,7 @@ inline void selector::FDSET_outgoing_sockets()
 
 inline RetCode selector::manage_disconnect_conn(event *conn_evt)
 {
+    conn_evt->conn_->close_connection();
     return RetCode_OK;
 }
 

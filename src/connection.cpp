@@ -263,7 +263,6 @@ RetCode connection::set_connection_established()
     }
 
     status_ = ConnectionStatus_ESTABLISHED;
-    on_established();
     return RetCode_OK;
 }
 
@@ -426,7 +425,7 @@ RetCode connection::recv_bytes(char *src_ip)
         buf_rem_len -= brecv;
         inet_ntop(AF_INET, &src_addr.sin_addr, src_ip, 16);
     }
-    if(brecv<0) {
+    if(brecv<=0) {
         rcode = sckt_hndl_err(brecv);
     }
     return rcode;
