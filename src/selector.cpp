@@ -80,7 +80,7 @@ RetCode acceptor::create_server_socket(SOCKET &serv_socket)
             } else {
                 lport++;
                 peer_.selector_.srv_sockaddr_in_.sin_port = serv_sockaddr_in_.sin_port = htons(lport);
-                log_->warn("bind KO errno:{}, try auto-adjusting listening port to:{} ...", errno, lport);
+                log_->debug("bind KO errno:{}, try auto-adjusting listening port to:{} ...", errno, lport);
             }
         }
     } else {
@@ -664,6 +664,8 @@ RetCode selector::conn_process_rdn_buff(std::shared_ptr<connection> &conn)
     return rcode;
 }
 
+#define SEL_TIMEOUT 2
+
 void selector::run()
 {
     SelectorStatus current = SelectorStatus_UNDEF;
@@ -688,7 +690,7 @@ void selector::run()
         set_status(SelectorStatus_SELECT);
 
         timeval sel_timeout;
-        sel_timeout.tv_sec = 5;
+        sel_timeout.tv_sec = SEL_TIMEOUT;
         sel_timeout.tv_usec = 0;
         time_t t0 = time(0), elapsed = 0;
 
@@ -712,11 +714,11 @@ void selector::run()
 
             FDSET_sockets();
 
-            if((elapsed = (time(0) - t0)) < 5) {
-                sel_timeout.tv_sec = 5 - elapsed;
+            if((elapsed = (time(0) - t0)) < SEL_TIMEOUT) {
+                sel_timeout.tv_sec = SEL_TIMEOUT - elapsed;
             } else {
                 t0 = time(0);
-                sel_timeout.tv_sec = 5;
+                sel_timeout.tv_sec = SEL_TIMEOUT;
             }
             sel_timeout.tv_usec = 0;
         }

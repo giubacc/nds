@@ -21,10 +21,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef NDS_NDS_H_
 #define NDS_NDS_H_
 
-#ifdef __GNUG__
-#include <string.h>
-#include <stdarg.h>
-#endif
 #if defined (__GNUG__) || defined(__MACH__) || defined(__APPLE__)
 #include <stdio.h>
 #define SOCKET int
@@ -32,8 +28,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SOCKET_ERROR   (-1)
 #endif
 #include <arpa/inet.h>
-
 #include <string>
+#include <iostream>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -44,7 +40,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/sinks/basic_file_sink.h"
 #include "json/json.h"
-
 
 #define RET_ON_KO(fun)\
 {\

@@ -62,6 +62,8 @@ spdlog::level::level_enum peer::cfg::get_spdloglvl() const
     }
 }
 
+#define NODE_SYNCH_DURATION 3
+
 RetCode peer::init()
 {
     RetCode rcode = RetCode_OK;
@@ -80,8 +82,8 @@ RetCode peer::init()
     //selector init
     RET_ON_KO(selector_.init())
 
-    //4 seconds before this node will auto generate the timestamp
-    tp_initial_synch_window_ = std::chrono::system_clock::now() + std::chrono::duration<int>(4);
+    //seconds before this node will auto generate the timestamp
+    tp_initial_synch_window_ = std::chrono::system_clock::now() + std::chrono::duration<int>(NODE_SYNCH_DURATION);
 
     return rcode;
 }
@@ -146,7 +148,6 @@ RetCode peer::process_incoming_events()
 
         if(evt.evt_ == Interrupt) {
             if(process_node_status() == RetCode_EXIT) {
-                log_->debug("exiting ...");
                 break;
             }
         } else if(evt.evt_ == IncomingConnect) {
@@ -155,7 +156,9 @@ RetCode peer::process_incoming_events()
         } else if((evt.evt_ == PacketAvailable) && foreign_evt(json_evt)) {
             //packet from multicast or tcp connection
             log_->trace("evt:\n{}", json_evt.toStyledString());
-            process_foreign_evt(evt, json_evt);
+            if(process_foreign_evt(evt, json_evt) == RetCode_EXIT){
+                break;
+            }
         } else {
             log_->debug("evt is from this node, discarding ...");
         }
@@ -205,6 +208,10 @@ RetCode peer::process_foreign_evt(event &evt, Json::Value &json_evt)
         if(data_ts > current_node_ts_) {
             data_ = json_evt[pkt_data_value].asString();
             current_node_ts_ = data_ts;
+            
+            if(cfg_.get_val){
+                return RetCode_EXIT;
+            }
         }
         if(data_ts < desired_cluster_ts_) {
             //data received is earlier than cluster one, notify cluster
@@ -251,7 +258,6 @@ int peer::run()
     }
 
     if(!cfg_.val.empty()) {
-        log_->info("set value:{} ...", cfg_.val);
         data_ = cfg_.val;
         desired_cluster_ts_ = current_node_ts_ = gen_ts();
     }
@@ -262,6 +268,7 @@ int peer::run()
 
     process_incoming_events();
     stop();
+    std::cout << data_ << std::endl;
     return rcode;
 }
 
