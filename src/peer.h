@@ -34,7 +34,7 @@ struct peer {
         uint16_t multicast_port = 8745;
         uint16_t listening_port = 31582;
         std::string val;
-        bool get = false;
+        bool get_val = false;
 
         std::string log_type = "console";
         std::string log_level = "info";
@@ -54,16 +54,17 @@ struct peer {
     RetCode process_node_status();
 
     bool foreign_evt(const Json::Value &json_evt);
-    RetCode process_foreign_evt(Json::Value &json_evt);
+    RetCode process_foreign_evt(event &evt, Json::Value &json_evt);
 
     RetCode send_alive_node_msg();
     Json::Value build_alive_node_msg() const;
 
+    RetCode send_data_msg(connection &conn);
+    Json::Value build_data_msg() const;
+
     RetCode send_packet(const Json::Value &pkt, connection &conn);
 
     uint32_t gen_ts() const;
-    uint32_t get_ts() const;
-    void set_ts(uint32_t ts);
 
     Json::Value evt_to_json(const event &evt);
 
@@ -74,14 +75,19 @@ struct peer {
     b_qu<event> incoming_evt_q_;
 
     //the time point at which this node will generate itself the timestamp;
-    //this will happen if no other node will respond to initial alive sent by
-    //this node.
-    std::chrono::system_clock::time_point tp_auto_gen_ts_;
+    //this will happen if no other node will respond to initial alive sent by this node.
+    //not daemon nodes ("pure" setter or getter nodes) will shutdown at this time point.
+    std::chrono::system_clock::time_point tp_initial_synch_window_;
 
-    //the timestamp shared across the cluser
-    uint32_t ts_ = 0;
+    //the currently timestamp set by this node
+    uint32_t current_node_ts_ = 0;
+
+    //the desired timestamp this node would like to reach.
+    //a successful synch with the cluster will transit desired_cluster_ts_ into current_node_ts_.
+    uint32_t desired_cluster_ts_ = 0;
+
     //the value shared across the cluser
-    std::string val_;
+    std::string data_;
 
     std::shared_ptr<spdlog::logger> log_;
 };

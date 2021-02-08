@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
                    .doc("spawn a new node"),
 
                    clipp::option("-j", "--join")
-                   .doc("join the cluster at specified multicast address")
+                   .doc("join the cluster at specified multicast group")
                    & clipp::value("multicast address", pr.cfg_.multicast_address),
 
                    clipp::option("-p", "--port")
@@ -47,8 +47,8 @@ int main(int argc, char *argv[])
                    .doc("specify logging verbosity [off, trace, info (default), warn, err")
                    & clipp::value("logging verbosity", pr.cfg_.log_level),
 
-                   clipp::opt_value("set").set(pr.cfg_.val).doc("set the value shared accross the cluster"),
-                   clipp::option("get").set(pr.cfg_.get, true).doc("read the value shared accross the cluster")
+                   clipp::opt_value("set").set(pr.cfg_.val).doc("set the value shared across the cluster"),
+                   clipp::option("get").set(pr.cfg_.get_val, true).doc("read the value shared across the cluster")
                );
 
     if(!clipp::parse(argc, argv, cli)) {

@@ -490,6 +490,10 @@ RetCode connection::recv_pkt(const char *src_ip)
 }
 
 void connection::on_established()
-{}
+{
+    if(con_type_ == ConnectionType_TCP_INGOING) {
+        sel_.peer_.incoming_evt_q_.put(event(IncomingConnect, self_as_shared_ptr()));
+    }
+}
 
 }

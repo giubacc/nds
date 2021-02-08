@@ -59,25 +59,29 @@ RetCode acceptor::create_server_socket(SOCKET &serv_socket)
     if(!log_) {
         log_ = peer_.log_;
     }
+    uint16_t lport = ntohs(serv_sockaddr_in_.sin_port);
 
     log_->debug("interface:{}, listening port:{}",
                 inet_ntoa(serv_sockaddr_in_.sin_addr),
-                ntohs(serv_sockaddr_in_.sin_port));
+                lport);
 
     if((serv_socket = serv_socket_ = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
         log_->debug("socket:{} OK", serv_socket);
-        if(!bind(serv_socket_, (sockaddr *)&serv_sockaddr_in_, sizeof(sockaddr_in))) {
-            log_->debug("bind OK");
-            if(!listen(serv_socket_, SOMAXCONN)) {
-                log_->debug("listen OK");
+        while(1) {
+            if(!bind(serv_socket_, (sockaddr *)&serv_sockaddr_in_, sizeof(sockaddr_in))) {
+                log_->debug("bind OK");
+                if(!listen(serv_socket_, SOMAXCONN)) {
+                    log_->debug("listen OK");
+                    break;
+                } else {
+                    log_->error("listen KO");
+                    return RetCode_SYSERR;
+                }
             } else {
-                log_->error("listen KO");
-                return RetCode_SYSERR;
+                lport++;
+                peer_.selector_.srv_sockaddr_in_.sin_port = serv_sockaddr_in_.sin_port = htons(lport);
+                log_->warn("bind KO errno:{}, try auto-adjusting listening port to:{} ...", errno, lport);
             }
-        } else {
-            int err = errno;
-            log_->error("bind KO err:{}", err);
-            return RetCode_SYSERR;
         }
     } else {
         log_->error("socket KO");

@@ -30,6 +30,7 @@ enum EvtType {
     Undef,
     Interrupt,
     ConnectRequest,
+    IncomingConnect,
     SendPacket,
     PacketAvailable,
     Disconnect,
