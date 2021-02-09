@@ -15,6 +15,7 @@ checkout_contribs:
         - "**/*.cpp"
         - .gitlab-ci.yml
   script:
+        - ls -la
         - ./checkout_contribs.sh
   artifacts:
     expire_in: 1 hour
