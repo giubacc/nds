@@ -6,7 +6,7 @@ checkout_contribs:
   variables:
         GIT_SUBMODULE_STRATEGY: recursive
   stage: prebuild
-  image: mcr.microsoft.com/vscode/devcontainers/base:0-debian-10
+  image: alpine
   only:
     changes:
         - "**/*.h"
@@ -36,7 +36,7 @@ build-nds:
   dependencies:
         - checkout_contribs
   script:
-        - apt-get -y install build-essential
+        - apt-get update & apt-get -y install build-essential
         - make
   artifacts:
     expire_in: 1 hour
