@@ -15,7 +15,6 @@ checkout_contribs:
         - "**/*.cpp"
         - .gitlab-ci.yml
   script:
-        - ls -la
         - ./checkout_contribs.sh
   artifacts:
     expire_in: 1 hour
@@ -37,6 +36,7 @@ build-nds:
   dependencies:
         - checkout_contribs
   script:
+        - apt-get -y install build-essential
         - make
   artifacts:
     expire_in: 1 hour
