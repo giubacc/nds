@@ -1,0 +1,9 @@
+[submodule "jsoncpp"]
+	path = jsoncpp
+	url = https://github.com/open-source-parsers/jsoncpp.git
+[submodule "spdlog"]
+	path = spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "clipp"]
+	path = clipp
+	url = https://github.com/muellan/clipp.git
