@@ -1,0 +1,41 @@
+stages:
+  - prebuild
+  - build
+
+checkout_contribs:
+  stage: prebuild
+  image: alpine
+  only:
+    changes:
+     - "**/*.h"
+     - "**/*.hpp"
+     - "**/*.c"
+     - "**/*.cpp"
+     - .gitlab-ci.yml
+  script:
+    - ./checkout_contribs.sh
+  artifacts:
+    expire_in: 1 hour
+    paths:
+      - jsoncpp
+      - spdlog
+      - clipp
+      
+build-lab04:
+  stage: build
+  image: mcr.microsoft.com/vscode/devcontainers/base:0-debian-10
+  only:
+    changes:
+     - "**/*.h"
+     - "**/*.hpp"
+     - "**/*.c"
+     - "**/*.cpp"
+     - .gitlab-ci.yml
+  dependencies:
+    - checkout_contribs
+  script:
+    - make
+  artifacts:
+    expire_in: 1 hour
+    paths:
+        - nds
