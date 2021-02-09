@@ -3,39 +3,41 @@ stages:
   - build
 
 checkout_contribs:
-  stage: prebuild
-  image: mcr.microsoft.com/vscode/devcontainers/base:0-debian-10
-  only:
+    variables:
+        GIT_SUBMODULE_STRATEGY: recursive
+    stage: prebuild
+    image: mcr.microsoft.com/vscode/devcontainers/base:0-debian-10
+    only:
     changes:
         - "**/*.h"
         - "**/*.hpp"
         - "**/*.c"
         - "**/*.cpp"
         - .gitlab-ci.yml
-  script:
+    script:
         - ./checkout_contribs.sh
-  artifacts:
+    artifacts:
     expire_in: 1 hour
     paths:
         - jsoncpp
         - spdlog
         - clipp
-      
+        
 build-lab04:
-  stage: build
-  image: mcr.microsoft.com/vscode/devcontainers/base:0-debian-10
-  only:
+    stage: build
+    image: mcr.microsoft.com/vscode/devcontainers/base:0-debian-10
+    only:
     changes:
         - "**/*.h"
         - "**/*.hpp"
         - "**/*.c"
         - "**/*.cpp"
         - .gitlab-ci.yml
-  dependencies:
+    dependencies:
         - checkout_contribs
-  script:
+    script:
         - make
-  artifacts:
+    artifacts:
     expire_in: 1 hour
     paths:
         - nds
