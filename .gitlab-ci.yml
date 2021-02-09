@@ -6,7 +6,7 @@ checkout_contribs:
   variables:
         GIT_SUBMODULE_STRATEGY: recursive
   stage: prebuild
-  image: alpine
+  image: mcr.microsoft.com/vscode/devcontainers/base:0-debian-10
   only:
     changes:
         - "**/*.h"
