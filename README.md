@@ -8,6 +8,7 @@ A NDS node can either act as daemon (pure node) or act as a client getting or se
 ## Operational Requirements
 
 NDS network protocol requires that UDP multicast traffic is enabled over the LAN.  
+NDS network protocol strongly requires hosts clocks to be synched.  
 Currently, TTL of UDP packets sent by a NDS node is hardcoded to 2. 
 
 ## Building Requirements
@@ -42,5 +43,10 @@ OPTIONS
 
 
 ## Synching Protocol
+
+Synching Protocol used by NDS relies on both UDP/IP multicast and TCP/IP point 2 point communications.  
+In nutshell, alive/status/DNS messages are all sent over multicast group; value (data) related messages are sent point 2 point via TCP/IP.  
+The idea behind this is that coordination traffic, hopefully lightweight, goes through multicast, and value traffic, potentially much more heavy, goes over a unicast communication.  
+
 
 
