@@ -29,6 +29,7 @@ int main(int argc, char *argv[])
     auto cli = (
                    clipp::option("-n", "--node")
                    .set(pr.cfg_.start_node, true)
+                   .set(pr.cfg_.get_val, false)
                    .doc("spawn a new node"),
 
                    clipp::option("-j", "--join")
@@ -48,6 +49,7 @@ int main(int argc, char *argv[])
                    & clipp::value("logging verbosity", pr.cfg_.log_level),
 
                    clipp::option("set")
+                   .set(pr.cfg_.get_val, false)
                    .doc("set the value shared across the cluster")
                    & clipp::value("value", pr.cfg_.val),
 

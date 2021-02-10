@@ -87,8 +87,9 @@ Various scenarios can happen here:
 ## Software Architecture
 
 NDS executable consist of 2 threads communicating each other:
+
 1. selector thread
-2. main thread
+2. peer thread
 
 ### Selector thread
 
@@ -97,9 +98,9 @@ All UDP/TCP connections are all monitored for read/write events.
 When a reading event is available, the selector thread read from the socket, pack-up the body into a message and send it to the main thread through a queue.
 Selector thread is driven by the main thread, it has no applicative logic, it only exist to serve the main thread requests and to notify it when new network events occurr.
 
-### Main thread
+### Peer thread
 
-Main thread is the brain of the application; it knows how to interpret messages coming from Selector thread and how to trigger appropriate actions.
+Peer thread is the brain of the application; it knows how to interpret messages coming from Selector thread and how to trigger appropriate actions.
 
 ## Third party libraries employed
 
