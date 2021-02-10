@@ -1,7 +1,7 @@
 # Naive Distributed Storage
 
 Naive Distributed Storage (NDS in brief) is a C/C++ software system that can share data across a local network (LAN).  
-NDS nodes can be spawned in the LAN on any host and without limitation* to the number of instances running on the same host.  
+NDS nodes can be spawned in the LAN on any host and without limitation to the number of instances running on the same host.  
 Such NDS cluster can retain a value - a string of any size - as long as at least 1 daemon node keeps alive.  
 A NDS node can either act as daemon or act as a client getting/setting the value hold by the cluster.
 
