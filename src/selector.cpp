@@ -66,10 +66,14 @@ RetCode acceptor::create_server_socket(SOCKET &serv_socket)
                 lport);
 
     if((serv_socket = serv_socket_ = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET) {
+
         log_->debug("socket:{} OK", serv_socket);
+
         while(1) {
             if(!bind(serv_socket_, (sockaddr *)&serv_sockaddr_in_, sizeof(sockaddr_in))) {
+
                 log_->debug("bind OK");
+
                 if(!listen(serv_socket_, SOMAXCONN)) {
                     log_->debug("listen OK");
                     break;
@@ -102,10 +106,12 @@ RetCode acceptor::accept(std::shared_ptr<connection> &new_conn)
         return RetCode_SYSERR;
     } else {
         getpeername(socket, (sockaddr *)&addr, &len);
+
         log_->debug("accept OK - socket:{}, host:{}, port:{}",
                     socket,
                     inet_ntoa(addr.sin_addr),
                     ntohs(addr.sin_port));
+
         new_conn->socket_ = socket;
         new_conn->addr_ = addr;
         new_conn->set_connection_established();
@@ -197,7 +203,9 @@ RetCode selector::enumHostNetInterfaces()
                         sizeof(struct sockaddr_in),
                         intf_ip, NI_MAXHOST,
                         NULL, 0, NI_NUMERICHOST);
+
             log_->debug("registering host-intf:{}-{}", tmp->ifa_name, intf_ip);
+
             hintfs_.insert(tmp->ifa_name);
         }
         tmp = tmp->ifa_next;
@@ -244,11 +252,14 @@ RetCode selector::create_UDP_notify_srv_sock()
     if((udp_ntfy_srv_socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != INVALID_SOCKET) {
         log_->debug("udp_ntfy_srv_socket_:{} OK", udp_ntfy_srv_socket_);
         if(!bind(udp_ntfy_srv_socket_, (sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) {
+
             log_->debug("udp_ntfy_srv_socket_:{} bind OK", udp_ntfy_srv_socket_);
+
             int flags = fcntl(udp_ntfy_srv_socket_, F_GETFL, 0);
             if(flags < 0) {
                 return RetCode_KO;
             }
+
             flags = (flags|O_NONBLOCK);
             if((res = fcntl(udp_ntfy_srv_socket_, F_SETFL, flags))) {
                 log_->critical("udp_ntfy_srv_socket_:{} fcntl KO err:{}", udp_ntfy_srv_socket_, errno);
@@ -256,6 +267,7 @@ RetCode selector::create_UDP_notify_srv_sock()
             } else {
                 log_->debug("udp_ntfy_srv_socket_:{} fcntl OK", udp_ntfy_srv_socket_);
             }
+
         } else {
             log_->critical("udp_ntfy_srv_socket_:{} bind KO err:{}", udp_ntfy_srv_socket_, errno);
             return RetCode_SYSERR;
@@ -271,9 +283,11 @@ RetCode selector::connect_UDP_notify_cli_sock()
 {
     socklen_t len = sizeof(udp_ntfy_sa_in_);
     getsockname(udp_ntfy_srv_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, &len);
+
     log_->debug("sin_addr:{}, sin_port:{}",
                 inet_ntoa(udp_ntfy_sa_in_.sin_addr),
                 htons(udp_ntfy_sa_in_.sin_port));
+
     if((udp_ntfy_cli_socket_ = socket(AF_INET, SOCK_DGRAM, 0)) != INVALID_SOCKET) {
         log_->debug("udp_ntfy_cli_socket_:{} OK", udp_ntfy_cli_socket_);
         if((connect(udp_ntfy_cli_socket_, (struct sockaddr *)&udp_ntfy_sa_in_, sizeof(udp_ntfy_sa_in_))) != INVALID_SOCKET) {
@@ -399,6 +413,7 @@ RetCode selector::process_outg_sock_inco_events()
 RetCode selector::consume_inco_sock_events()
 {
     if(FD_ISSET(srv_socket_, &read_FDs_)) {
+
         std::shared_ptr<connection> inco_conn(new connection(*this, ConnectionType_TCP_INGOING));
         if(srv_acceptor_.accept(inco_conn)) {
             log_->critical("accepting new connection");
@@ -414,6 +429,7 @@ RetCode selector::consume_inco_sock_events()
                 return RetCode_KO;
             }
         }
+
     } else {
         if(process_inco_sock_inco_events()) {
             log_->critical("processing incoming socket events");
@@ -539,16 +555,21 @@ RetCode selector::process_asyn_evts()
     long brecv = 0, recv_buf_sz = sizeof(void *);
     event *conn_evt = nullptr;
     bool conn_still_valid = true;
+
     while((brecv = recv(udp_ntfy_srv_socket_, (char *)&conn_evt, recv_buf_sz, 0)) > 0) {
+
         if(brecv != recv_buf_sz) {
             log_->critical("brecv != recv_buf_sz");
             return RetCode_GENERR;
         }
+
         if(conn_evt->evt_ != Interrupt) {
+
             /*check if we still have connection*/
             if(conn_evt->evt_ != ConnectRequest) {
                 conn_still_valid = is_still_valid_connection(conn_evt);
             }
+
             if(conn_still_valid) {
                 switch(conn_evt->evt_) {
                     case SendPacket:
@@ -571,11 +592,13 @@ RetCode selector::process_asyn_evts()
             } else {
                 log_->debug("socket:{} is no longer valid", conn_evt->conn_->socket_);
             }
+
         }
         delete conn_evt;
     }
     if(brecv == SOCKET_ERROR) {
         int err = errno;
+
         if(err == EAGAIN || err == EWOULDBLOCK) {
             //ok we can go ahead
         } else if(err == ECONNRESET) {
@@ -639,6 +662,7 @@ RetCode selector::stop_and_clean()
         if(it->second->status_ != ConnectionStatus_DISCONNECTED) {
             it->second->close_connection();
         }
+
     wp_inco_conn_map_.clear();
     inco_conn_map_.clear();
     server_socket_shutdown();
@@ -647,6 +671,7 @@ RetCode selector::stop_and_clean()
         if(it->second->status_ != ConnectionStatus_DISCONNECTED) {
             it->second->close_connection();
         }
+
     outg_conn_map_.clear();
 
     FD_ZERO(&read_FDs_);

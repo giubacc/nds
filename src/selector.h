@@ -25,18 +25,32 @@ namespace nds {
 struct peer;
 struct selector;
 
-//event type
+/**
+ * event type
+ *
+ */
 enum EvtType {
     Undef,
-    Interrupt,
-    ConnectRequest,
-    IncomingConnect,
-    SendPacket,
-    PacketAvailable,
-    Disconnect,
+    Interrupt,              //generic interrupt
+    ConnectRequest,         //request for TCP connection (peer -> selector)
+    IncomingConnect,        //new incoming TCP connection (selector -> peer)
+    SendPacket,             //request to send a packet (peer -> selector)
+    PacketAvailable,        //foreign packet available (selector -> peer)
+    Disconnect,             //connection disconnection event
 };
 
-// event
+/**
+ * An event
+ *
+ * This class is used as message between selector/peer threads.
+ *
+ * It can model an interrupt (Interrupt).
+ * It can be used by peer thread to request selector thread to connect to TCP (ConnectRequest).
+ * It can transport an incoming packet from a multicast/unicast socket (PacketAvailable).
+ * It can be used by peer thread to request selector to send a packet (SendPacket).
+ * It can be used by selector to inform peer thread of a received foreign packet (PacketAvailable).
+ * It can be used to manage an event of disconnection (Disconnect).
+ */
 struct event {
     explicit event();
     explicit event(EvtType evt);
@@ -52,8 +66,12 @@ struct event {
     char opt_src_ip_[16] = {0};
 };
 
-// acceptor
-
+/**
+ * TCP server socket acceptor
+ *
+ * A singleton class used as helper class by selector class.
+ * It simply accept incoming TCP connections over the listening socket.
+ */
 struct acceptor {
     acceptor(peer &p);
     ~acceptor();
@@ -69,24 +87,33 @@ struct acceptor {
     std::shared_ptr<spdlog::logger> log_;
 };
 
-// SelectorStatus
-
+/**
+ * States of the selector automa.
+ *
+ */
 enum SelectorStatus {
-    SelectorStatus_UNDEF,
-    SelectorStatus_TO_INIT,
-    SelectorStatus_INIT,
-    SelectorStatus_REQUEST_READY,    // <<-- asynch request to transit into Ready status.
-    SelectorStatus_READY,
-    SelectorStatus_REQUEST_SELECT,   // <<-- asynch request to transit into Selecting status.
-    SelectorStatus_SELECT,
-    SelectorStatus_REQUEST_STOP,     // <<-- asynch request to transit into Stopped status.
-    SelectorStatus_STOPPING,
-    SelectorStatus_STOPPED,
+    SelectorStatus_UNDEF,               // zero status
+    SelectorStatus_TO_INIT,             // selector early status
+    SelectorStatus_INIT,                // selector is inited
+    SelectorStatus_REQUEST_READY,       // <<-- asynch request made by peer thread to transit into Ready status.
+    SelectorStatus_READY,               // selector has completed all init steps and it is ready to select
+    SelectorStatus_REQUEST_SELECT,      // <<-- asynch request made by peer thread to transit into Selecting status.
+    SelectorStatus_SELECT,              // selector is currently selecting over sockets
+    SelectorStatus_REQUEST_STOP,        // <<-- asynch request made by peer thread to transit into Stopped status.
+    SelectorStatus_STOPPING,            // selector is stopping
+    SelectorStatus_STOPPED,             // selector is stopped and can be safely disposed
     SelectorStatus_ERROR = 500,
 };
 
-// selector
-
+/**
+ * selector
+ *
+ * The selector is a singleton class used to actively monitor all sockets of all
+ * connections managed by this NDS node.
+ * The selector monitors all internal/multicast UDP sockets alongside with all TCP sockets.
+ * When a packet is read from a socket it is packed up and sent asynch to the peer thread.
+ * The selector is also listening for events coming from peer thread (such as requests to send a packet over TCP).
+ */
 struct selector : public th {
     explicit selector(peer &);
     virtual ~selector();
@@ -135,13 +162,14 @@ struct selector : public th {
     RetCode server_socket_shutdown();
     RetCode stop_and_clean();
 
-    //rep
     peer &peer_;
     SelectorStatus status_;
     fd_set read_FDs_, write_FDs_;
 
     int nfds_;
     int sel_res_;
+
+    //internal UDP socket used to interrupt the select() and notify selector of new events.
     sockaddr_in udp_ntfy_sa_in_;
     SOCKET udp_ntfy_srv_socket_;
     SOCKET udp_ntfy_cli_socket_;
@@ -168,6 +196,7 @@ struct selector : public th {
     std::shared_ptr<connection> mcast_udp_inco_conn_;
     connection mcast_udp_outg_conn_;
 
+    //logger
     std::shared_ptr<spdlog::logger> log_;
 };
 

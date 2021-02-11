@@ -95,8 +95,8 @@ NDS executable consist of 2 threads communicating each other:
 
 Selector thread is responsible of low level communication with host interfaces and sockets.
 All UDP/TCP connections are all monitored for read/write events.
-When a reading event is available, the selector thread read from the socket, pack-up the body into a message and send it to the main thread through a queue.
-Selector thread is driven by the main thread, it has no applicative logic, it only exist to serve the main thread requests and to notify it when new network events occurr.
+When a reading event is available, the selector thread read from the socket, pack-up the body into a message and send it to the peer thread through a queue.
+Selector thread is driven by the peer thread, it has no applicative logic, it only exist to serve the peer thread requests and to notify it when new network events occurr.
 
 ### Peer thread
 
@@ -112,7 +112,7 @@ External libraries are:
 - [jsoncpp](https://github.com/open-source-parsers/jsoncpp)
 - [spdlog](https://github.com/gabime/spdlog)
 
-## further references
+## Further documentation
 
 Please refer to code comments for an in depth explanation of the functioning of the system.
 

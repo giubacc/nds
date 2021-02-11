@@ -58,7 +58,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace nds {
 
-/** @brief return codes.
+/**
     When possible functions and methods of nds framework
     will use this set of codes as return value.
 */

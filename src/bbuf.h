@@ -23,7 +23,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace nds {
 
-/** @brief g_bbuf.
+/**
+ * A simple growing byte buffer providing read/write capabilities.
+ * Used when receiving/sending from sockets.
+ *
 */
 struct g_bbuf {
     explicit g_bbuf();

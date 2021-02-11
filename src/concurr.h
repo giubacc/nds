@@ -29,14 +29,17 @@ class logger;
 
 namespace nds {
 
-/** @brief runnable interface.
+/**
+ * runnable interface.
 */
 struct runnable {
     virtual ~runnable() {}
     virtual void run() = 0;
 };
 
-/** @brief a wrapper to std::thread
+/**
+ * A wrapper to std::thread
+ *
 */
 struct th : public runnable {
         explicit th() :
@@ -85,7 +88,8 @@ struct th : public runnable {
         std::unique_ptr<std::thread> th_;
 };
 
-/** @brief A simple blocking queue
+/**
+ * A very simple blocking queue
 */
 template <typename T>
 struct b_qu {
@@ -106,7 +110,7 @@ struct b_qu {
             while(q_.empty()) {
                 cv_.wait(lck);
             }
-            T msg = std::move(q_.front()); //bad hack
+            T msg = std::move(q_.front()); //bad hack :(
             q_.pop();
             return msg;
         }

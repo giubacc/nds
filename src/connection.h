@@ -26,12 +26,20 @@ namespace nds {
 struct peer;
 struct selector;
 
+/**
+ * The status of a decoding phase when reading from a socket.
+ *
+ * 1. chasing body len (4 bytes)
+ * 2. chasing body (n bytes)
+*/
 enum PktChasingStatus {
     PktChasingStatus_BodyLen,
     PktChasingStatus_Body
 };
 
-// ConnectionType
+/**
+ * A connection type
+ */
 enum ConnectionType {
     ConnectionType_UNDEFINED,
     ConnectionType_TCP_INGOING,     //TCP ingoing
@@ -40,12 +48,18 @@ enum ConnectionType {
     ConnectionType_UDP_OUTGOING,    //UDP outgoing multicast
 };
 
-// ConnectionStatus
+/**
+ * A connection status
+ */
 enum ConnectionStatus {
     ConnectionStatus_DISCONNECTED,
     ConnectionStatus_ESTABLISHED,
 };
 
+/**
+ * A high-level abstraction of a UDP/TCP connection.
+ * It provides methods for read/write from the associated socket.
+ */
 struct connection {
 
     connection(selector &sel, ConnectionType ct);
@@ -114,6 +128,7 @@ struct connection {
     //accumulating sending buffer
     g_bbuf acc_snd_buff_;
 
+    //logger
     std::shared_ptr<spdlog::logger> log_;
 };
 
