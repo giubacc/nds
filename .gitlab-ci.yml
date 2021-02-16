@@ -22,6 +22,7 @@ checkout_contribs:
         - jsoncpp
         - spdlog
         - clipp
+        - googletest
       
 build-nds:
   stage: build
