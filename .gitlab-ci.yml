@@ -39,8 +39,8 @@ build-nds:
   script:
         - apt-get update
         - apt-get -y install build-essential cmake automake autogen libtool
-        - cd jsoncpp && mkdir build && cd build && cmake .. && make
-        - cd googletest && mkdir build && cd build && cmake .. -DBUILD_GMOCK=OFF && make
+        - cd jsoncpp && mkdir build && cd build && cmake .. && make && cd ../..
+        - cd googletest && mkdir build && cd build && cmake .. -DBUILD_GMOCK=OFF && make && cd ../..
         - make
   artifacts:
     expire_in: 1 hour
