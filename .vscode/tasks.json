@@ -10,6 +10,16 @@
                 "isDefault": true
             },
             "problemMatcher": []
-        }
+        },
+        {
+            "label": "Build nds_test",
+            "type": "shell",
+            "command": "make -f makefile_test",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }        
     ]
 }

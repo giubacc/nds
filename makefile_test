@@ -1,0 +1,31 @@
+SRC = 	./src/main.cpp\
+		./src/bbuf.cpp\
+		./src/selector.cpp\
+		./src/connection.cpp\
+		./src/peer.cpp\
+		./src/test.cpp		
+		
+OBJ = $(SRC:.cpp=.o)
+OUTDIR = .
+INCLUDES = 	-I./src\
+			-I./jsoncpp/include\
+			-I./spdlog/include\
+			-I./clipp/include\
+			-I./googletest/googletest/include
+
+CCFLAGS = -Wall -g -DG_TEST
+CCC = g++
+LDLIBS= -L./jsoncpp/build/src/lib_json -L./googletest/build/lib -lgtest -ljsoncpp -lpthread
+
+.cpp.o:
+	$(CCC) $(INCLUDES) $(CCFLAGS) -c $< -o $@
+
+default: nds_test
+	
+all: clean nds_test
+	
+nds_test: $(OBJ)
+	$(CCC) -o $(OUTDIR)/nds_test $(OBJ) $(LDLIBS)
+
+clean:
+	rm -f $(OBJ) $(OUTDIR)/nds_test

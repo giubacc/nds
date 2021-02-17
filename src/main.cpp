@@ -22,9 +22,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "peer.h"
 #include "clipp.h"
 
+#if G_TEST
+int mock_main(int argc, char *argv[], nds::peer &pr)
+{
+#else
 int main(int argc, char *argv[])
 {
     nds::peer pr;
+#endif
 
     auto cli = (
                    clipp::option("-n", "--node")

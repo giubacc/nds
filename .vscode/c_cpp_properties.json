@@ -6,7 +6,8 @@
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/jsoncpp/include",
                 "${workspaceFolder}/spdlog/include",
-                "${workspaceFolder}/clipp/include"
+                "${workspaceFolder}/clipp/include",
+                "${workspaceFolder}/googletest/googletest/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

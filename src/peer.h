@@ -122,6 +122,9 @@ struct peer {
     //the value shared across the cluser
     std::string data_;
 
+    //exit required
+    bool exit_required_ = false;
+
     //logger
     std::shared_ptr<spdlog::logger> log_;
 };

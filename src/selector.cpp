@@ -762,6 +762,9 @@ void selector::run()
 
     set_status(SelectorStatus_STOPPED);
     stop();
+
+    //generate interrupt on peer
+    peer_.incoming_evt_q_.put(nds::event());
 }
 
 }
