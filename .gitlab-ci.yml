@@ -1,6 +1,7 @@
 stages:
   - prebuild
   - build
+  - test
 
 checkout_contribs:
   variables:
@@ -46,3 +47,27 @@ build-nds:
     expire_in: 1 hour
     paths:
         - nds
+
+test-nds:
+  stage: test
+  image: mcr.microsoft.com/vscode/devcontainers/base:0-debian-10
+  only:
+    changes:
+        - "**/*.h"
+        - "**/*.hpp"
+        - "**/*.c"
+        - "**/*.cpp"
+        - .gitlab-ci.yml
+  dependencies:
+        - build
+  script:
+        - apt-get update
+        - apt-get -y install build-essential cmake automake autogen libtool
+        - cd jsoncpp && mkdir build && cd build && cmake .. && make && cd ../..
+        - cd googletest && mkdir build && cd build && cmake .. -DBUILD_GMOCK=OFF && make && cd ../..
+        - make -f makefile_test
+        - ./nds_test
+  artifacts:
+    expire_in: 1 hour
+    paths:
+        - nds_test
