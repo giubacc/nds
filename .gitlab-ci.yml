@@ -43,10 +43,12 @@ build-nds:
         - cd jsoncpp && mkdir build && cd build && cmake .. && make && cd ../..
         - cd googletest && mkdir build && cd build && cmake .. -DBUILD_GMOCK=OFF && make && cd ../..
         - make
+        - make -f makefile_test clean && make -f makefile_test
   artifacts:
     expire_in: 1 hour
     paths:
         - nds
+        - nds_test
 
 test-nds:
   stage: test
@@ -59,13 +61,8 @@ test-nds:
         - "**/*.cpp"
         - .gitlab-ci.yml
   dependencies:
-        - build
+        - build-nds
   script:
-        - apt-get update
-        - apt-get -y install build-essential cmake automake autogen libtool
-        - cd jsoncpp && mkdir build && cd build && cmake .. && make && cd ../..
-        - cd googletest && mkdir build && cd build && cmake .. -DBUILD_GMOCK=OFF && make && cd ../..
-        - make -f makefile_test
         - ./nds_test
   artifacts:
     expire_in: 1 hour
