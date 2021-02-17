@@ -111,6 +111,7 @@ External libraries are:
 - [clipp](https://github.com/muellan/clipp)
 - [jsoncpp](https://github.com/open-source-parsers/jsoncpp)
 - [spdlog](https://github.com/gabime/spdlog)
+- [googletest](https://github.com/google/googletest)
 
 ## Further documentation
 
